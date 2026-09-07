@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-server
+data
+.git
+.gitignore
+.env
+.env.local
+*.local
+docs
+tests
+deploy.cjs
+deploy.tar.gz
+npm-debug.log*
+.DS_Store
+README.md

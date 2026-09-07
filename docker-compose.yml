@@ -1,0 +1,21 @@
+name: interview-queue
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: interview-queue:latest
+    container_name: interview-queue-app
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - NODE_ENV=production
+      - STATE_FILE=/app/data/state.json
+      - STATIC_DIR=/app/dist
+      # 从 compose 同目录 .env 插值（deploy 首跑生成随机值）；.env 不入库
+      - INTERVIEWER_PASSWORD=${INTERVIEWER_PASSWORD:?请在 /root/interview-queue/.env 设置 INTERVIEWER_PASSWORD}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
