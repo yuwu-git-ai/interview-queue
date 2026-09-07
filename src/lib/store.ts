@@ -34,9 +34,9 @@ async function probeServer(base = '/api'): Promise<boolean> {
   }
 }
 
-/** ServerStore：REST + 轮询（由 App 定时 refresh） */
+/** ServerStore：REST + 轮询（由 App 定时 refresh）。state 经 holder 可变，getter 实时暴露 */
 function createServerStore(): FrontStore {
-  let state: AppState = createEmptyState();
+  const holder: { state: AppState } = { state: createEmptyState() };
   let token = sessionStorage.getItem('iq_token') || '';
   const subs = new Set<() => void>();
   const emit = () => subs.forEach((f) => f());
@@ -61,13 +61,15 @@ function createServerStore(): FrontStore {
     sessionStorage.setItem('iq_token', t);
   };
   const refreshNow = async () => {
-    state = await call('/api/state');
+    holder.state = await call('/api/state');
     emit();
   };
 
   return {
     kind: 'server',
-    state,
+    get state() {
+      return holder.state;
+    },
     subscribe: (f) => {
       subs.add(f);
       return () => subs.delete(f);
@@ -105,11 +107,11 @@ function createServerStore(): FrontStore {
 
 /** LocalStore：localStorage + BroadcastChannel 同机标签页联动（演示/降级） */
 function createLocalStore(): FrontStore {
-  let state: AppState = loadLocal();
+  const holder: { state: AppState } = { state: loadLocal() };
   const subs = new Set<() => void>();
   const chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('iq-sync') : null;
   const emit = () => subs.forEach((f) => f());
-  const persist = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
+  const persist = () => localStorage.setItem(LS_KEY, JSON.stringify(holder.state));
 
   function loadLocal(): AppState {
     try {
@@ -123,30 +125,32 @@ function createLocalStore(): FrontStore {
 
   if (chan) {
     chan.onmessage = (e) => {
-      if (e.data?.revision !== state.revision) {
-        state = e.data.state;
+      if (e.data?.revision !== holder.state.revision) {
+        holder.state = e.data.state;
         emit();
       }
     };
   }
 
   const bump = (next: AppState) => {
-    state = next;
+    holder.state = next;
     persist();
     emit();
-    if (chan) chan.postMessage({ revision: state.revision, state });
+    if (chan) chan.postMessage({ revision: holder.state.revision, state: holder.state });
   };
 
   /** 前方真正在等人数（与 server aheadOf 语义一致） */
   const aheadOfLocal = (c: Candidate): number => {
     if (c.status !== 'waiting') return -1;
-    const idx = waitingList(state, c.department).findIndex((x) => x.id === c.id);
+    const idx = waitingList(holder.state, c.department).findIndex((x) => x.id === c.id);
     return idx === -1 ? -1 : idx;
   };
 
   return {
     kind: 'local',
-    state,
+    get state() {
+      return holder.state;
+    },
     subscribe: (f) => {
       subs.add(f);
       return () => subs.delete(f);
@@ -155,17 +159,17 @@ function createLocalStore(): FrontStore {
       /* no-op，本地即时 */
     },
     register: async (input) => {
-      const r = registerCandidate(state, input);
+      const r = registerCandidate(holder.state, input);
       if (r.created) {
         bump(r.state);
       } else {
-        state = r.state;
+        holder.state = r.state;
         emit();
       }
       return { created: r.created, candidate: r.candidate, ahead: aheadOfLocal(r.candidate) };
     },
     lookup: async (mobile) =>
-      state.candidates
+      holder.state.candidates
         .filter((c) => c.mobile === mobile)
         .map((c) => ({ ...c, ahead: aheadOfLocal(c) })),
     login: async (pw) => {
@@ -173,16 +177,16 @@ function createLocalStore(): FrontStore {
       return 'local-token';
     },
     callNext: async (dept) => {
-      bump(callNext(state, dept));
+      bump(callNext(holder.state, dept));
     },
     recall: async (dept) => {
-      bump(recall(state, dept));
+      bump(recall(holder.state, dept));
     },
     reorder: async (dept, candidateId, action) => {
-      bump(reorder(state, dept, candidateId, action));
+      bump(reorder(holder.state, dept, candidateId, action));
     },
     complete: async (candidateId) => {
-      bump(completeInterview(state, candidateId));
+      bump(completeInterview(holder.state, candidateId));
     },
   };
 }
