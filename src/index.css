@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+html, body, #root { height: 100%; }
+body { @apply bg-slate-100 text-slate-900 antialiased; }
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

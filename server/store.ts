@@ -1,0 +1,71 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AppState, Candidate, DeptCode } from '../shared/types';
+import {
+  createEmptyState, registerCandidate, callNext as engCallNext, recall as engRecall,
+  reorder as engReorder, completeInterview as engComplete, waitingList, type RegisterInput, type ReorderAction,
+} from '../shared/engine';
+
+export interface RegisterResult { created: boolean; candidate: Candidate; }
+
+/** 某候选人在其部门内"前方真正在等的人数"（interviewing/completed 不计；非 waiting 返回 -1） */
+export function aheadOf(state: AppState, c: Candidate): number {
+  if (c.status !== 'waiting') return -1;
+  const idx = waitingList(state, c.department).findIndex((x) => x.id === c.id);
+  return idx === -1 ? -1 : idx;
+}
+
+function save(state: AppState, file: string) {
+  const dir = path.dirname(file);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+  fs.renameSync(tmp, file); // 原子替换
+}
+
+function load(file: string): AppState {
+  if (!fs.existsSync(file)) return createEmptyState();
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as AppState;
+  } catch (e) {
+    console.error('[store] 状态文件损坏，用空状态兜底:', e);
+    return createEmptyState();
+  }
+}
+
+export interface ServerStore {
+  getState(): AppState;
+  persist(): void;
+  overwrite(next: AppState): void;
+  register(input: RegisterInput): RegisterResult;
+  callNext(department: DeptCode): AppState;
+  recall(department: DeptCode): AppState;
+  reorder(department: DeptCode, candidateId: string, action: ReorderAction): AppState;
+  complete(candidateId: string): AppState;
+  lookupByMobile(mobile: string): Candidate[];
+  verifyPassword(pw: string): boolean;
+}
+
+export function createServerStore(file = process.env.STATE_FILE || './data/state.json'): ServerStore {
+  let state = load(file);
+
+  const commit = (next: AppState) => { state = next; save(state, file); };
+
+  const api: ServerStore = {
+    getState: () => state,
+    persist: () => save(state, file),
+    overwrite: (next) => { state = next; save(state, file); },
+    register: (input) => {
+      const { state: next, created, candidate } = registerCandidate(state, input);
+      if (created) commit(next);
+      return { created, candidate };
+    },
+    callNext: (department) => { const next = engCallNext(state, department); if (next !== state) commit(next); return state; },
+    recall: (department) => { const next = engRecall(state, department); if (next !== state) commit(next); return state; },
+    reorder: (department, candidateId, action) => { const next = engReorder(state, department, candidateId, action); if (next !== state) commit(next); return state; },
+    complete: (candidateId) => { const next = engComplete(state, candidateId); if (next !== state) commit(next); return state; },
+    lookupByMobile: (mobile) => state.candidates.filter((c) => c.mobile === mobile),
+    verifyPassword: (pw) => pw === (process.env.INTERVIEWER_PASSWORD || '123'),
+  };
+  return api;
+}
