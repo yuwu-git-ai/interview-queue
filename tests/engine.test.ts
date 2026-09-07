@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createEmptyState, registerCandidate, callNext, recall, reorder, completeInterview,
+  createEmptyState, registerCandidate, addCandidate, callNext, recall, reorder, completeInterview,
   buildAnnouncementText, statsOf, waitingList, listByStatus, findCandidateByMobile,
 } from '@/shared/engine';
 
@@ -58,6 +58,32 @@ describe('registerCandidate', () => {
   });
   it('手机号校验失败抛错', () => {
     expect(() => registerCandidate(createEmptyState(), { department: 'A', name: '甲', mobile: '123', wechat: 'w', gradeClass: 'c', note: '', now: T0 })).toThrow();
+  });
+});
+
+describe('addCandidate 面试官补录', () => {
+  it('仅姓名+手机号即可入队，微信/班级默认空串', () => {
+    const r = addCandidate(createEmptyState(), { department: 'A', name: '现场生', mobile: '13800006666', now: T0 });
+    expect(r.candidate.number).toBe('A01');
+    expect(r.candidate.wechat).toBe('');
+    expect(r.candidate.gradeClass).toBe('');
+    expect(r.candidate.status).toBe('waiting');
+    expect(waitingList(r.state, 'A').map((c) => c.number)).toEqual(['A01']);
+  });
+  it('同部门同手机号未完成 → 抛错提示已有登记', () => {
+    const s = addCandidate(createEmptyState(), { department: 'A', name: '甲', mobile: '13800006666', now: T0 }).state;
+    expect(() => addCandidate(s, { department: 'A', name: '乙', mobile: '13800006666', now: T0 + 1 })).toThrow(/已有登记/);
+  });
+  it('已完成后再补录同手机号 → 允许（新号 A02）', () => {
+    let s = addCandidate(createEmptyState(), { department: 'A', name: '甲', mobile: '13800006666', now: T0 }).state;
+    s = callNext(s, 'A', T0 + 5);
+    s = completeInterview(s, s.candidates[0].id, T0 + 6);
+    const again = addCandidate(s, { department: 'A', name: '甲', mobile: '13800006666', now: T0 + 7 });
+    expect(again.candidate.number).toBe('A02');
+  });
+  it('空姓名 / 非法手机号 → 抛错', () => {
+    expect(() => addCandidate(createEmptyState(), { department: 'A', name: '', mobile: '13800006666' })).toThrow();
+    expect(() => addCandidate(createEmptyState(), { department: 'A', name: '甲', mobile: '123' })).toThrow();
   });
 });
 

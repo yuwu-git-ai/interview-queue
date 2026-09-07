@@ -81,6 +81,16 @@ export function buildApp(opts: Options = {}) {
     catch (e: any) { res.status(400).json({ error: e.message }); }
   });
 
+  // 面试官补录（现场没扫码的同学）：仅需 部门+姓名+手机号，微信/班级选填
+  app.post('/api/interviewer/register', auth, (req, res) => {
+    try {
+      const c = store.add(req.body);
+      res.json({ created: true, candidate: c });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
   // 生产环境托管前端
   const dist = process.env.STATIC_DIR || path.resolve(process.cwd(), 'dist');
   if (fs.existsSync(dist)) {

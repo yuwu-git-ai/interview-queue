@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AppState, Candidate, DeptCode } from '../shared/types';
 import {
-  createEmptyState, registerCandidate, callNext as engCallNext, recall as engRecall,
-  reorder as engReorder, completeInterview as engComplete, waitingList, type RegisterInput, type ReorderAction,
+  createEmptyState, registerCandidate, addCandidate as engAddCandidate, callNext as engCallNext, recall as engRecall,
+  reorder as engReorder, completeInterview as engComplete, waitingList, type RegisterInput, type StaffAddInput, type ReorderAction,
 } from '../shared/engine';
 
 export interface RegisterResult { created: boolean; candidate: Candidate; }
@@ -38,6 +38,7 @@ export interface ServerStore {
   persist(): void;
   overwrite(next: AppState): void;
   register(input: RegisterInput): RegisterResult;
+  add(input: StaffAddInput): Candidate;
   callNext(department: DeptCode): AppState;
   recall(department: DeptCode): AppState;
   reorder(department: DeptCode, candidateId: string, action: ReorderAction): AppState;
@@ -59,6 +60,12 @@ export function createServerStore(file = process.env.STATE_FILE || './data/state
       const { state: next, created, candidate } = registerCandidate(state, input);
       if (created) commit(next);
       return { created, candidate };
+    },
+    // 面试官补录：引擎已对同手机号本部门未完成抛错，能走到这里即为新建
+    add: (input) => {
+      const r = engAddCandidate(state, input);
+      commit(r.state);
+      return r.candidate;
     },
     callNext: (department) => { const next = engCallNext(state, department); if (next !== state) commit(next); return state; },
     recall: (department) => { const next = engRecall(state, department); if (next !== state) commit(next); return state; },

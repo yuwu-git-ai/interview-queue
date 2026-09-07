@@ -60,4 +60,31 @@ describe('API', () => {
     expect(res.body[0].number).toBe('C01');
     expect(res.body[0].ahead).toBe(0);
   });
+  it('未登录访问补录端点 → 401', async () => {
+    const res = await request(app).post('/api/interviewer/register').send({ department: 'B', name: '某人', mobile: '13800008888' });
+    expect(res.status).toBe(401);
+  });
+  it('登录后补录（仅姓名+手机号）→ 新号 B01，微信/班级为空可接受', async () => {
+    const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
+    const token = login.body.token;
+    const res = await request(app)
+      .post('/api/interviewer/register')
+      .send({ department: 'B', name: '补录同学', mobile: '13800008888' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(true);
+    expect(res.body.candidate.number).toBe('B01');
+    expect(res.body.candidate.wechat).toBe('');
+    expect(res.body.candidate.gradeClass).toBe('');
+  });
+  it('同部门同手机号补录重复 → 400 提示已有登记', async () => {
+    const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
+    const token = login.body.token;
+    const dup = await request(app)
+      .post('/api/interviewer/register')
+      .send({ department: 'B', name: '补录同学2', mobile: '13800008888' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(dup.status).toBe(400);
+    expect(dup.body.error).toContain('已有登记');
+  });
 });

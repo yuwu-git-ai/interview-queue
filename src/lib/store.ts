@@ -1,5 +1,5 @@
 import type { AppState, Candidate, DeptCode } from '@/shared/types';
-import { registerCandidate, callNext, recall, reorder, completeInterview, createEmptyState, waitingList, type RegisterInput } from '@/shared/engine';
+import { registerCandidate, addCandidate, callNext, recall, reorder, completeInterview, createEmptyState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
 
 const LS_KEY = 'interview_queue_state_v1';
 const LS_LOCAL_PW = 'iq_local_pw';
@@ -13,6 +13,7 @@ export interface FrontStore {
   subscribe(fn: () => void): () => void;
   refresh(): Promise<void>;
   register(input: RegisterInput & { department: DeptCode }): Promise<{ created: boolean; candidate: Candidate; ahead: number }>;
+  staffRegister(input: StaffAddInput): Promise<Candidate>;
   lookup(mobile: string): Promise<LookupCandidate[]>;
   login(pw: string): Promise<string>;
   callNext(dept: DeptCode): Promise<void>;
@@ -79,6 +80,11 @@ function createServerStore(): FrontStore {
       const r = await call('/api/register', 'POST', input);
       await refreshNow();
       return r;
+    },
+    staffRegister: async (input) => {
+      const r = await call('/api/interviewer/register', 'POST', input);
+      await refreshNow();
+      return r.candidate;
     },
     lookup: async (mobile) => call(`/api/lookup?mobile=${encodeURIComponent(mobile)}`),
     login: async (pw) => {
@@ -167,6 +173,11 @@ function createLocalStore(): FrontStore {
         emit();
       }
       return { created: r.created, candidate: r.candidate, ahead: aheadOfLocal(r.candidate) };
+    },
+    staffRegister: async (input) => {
+      const r = addCandidate(holder.state, input);
+      bump(r.state);
+      return r.candidate;
     },
     lookup: async (mobile) =>
       holder.state.candidates

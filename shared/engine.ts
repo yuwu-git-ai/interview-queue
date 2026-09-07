@@ -67,20 +67,30 @@ function pushAnnouncement(s: AppState, type: Announcement['type'], candidateId: 
   if (s.announcements.length > MAX_ANNOUNCEMENTS) s.announcements = s.announcements.slice(-MAX_ANNOUNCEMENTS);
 }
 
-export function registerCandidate(s: AppState, input: RegisterInput): { state: AppState; created: boolean; candidate: Candidate; existing?: Candidate } {
-  const { department, name, mobile, wechat, gradeClass, note = '', now = Date.now() } = input;
+/** 面试官补录入参：部门+姓名+手机号必填，微信/班级可选 */
+export interface StaffAddInput {
+  department: DeptCode;
+  name: string;
+  mobile: string;
+  wechat?: string;
+  gradeClass?: string;
+  note?: string;
+  now?: number;
+}
+
+/** 入队共用（不校验微信/班级是否必填）：查重 → 分配序号 → 入队 */
+function enqueue(s: AppState, input: StaffAddInput): { state: AppState; created: boolean; candidate: Candidate; existing?: Candidate } {
+  const { department, name, mobile, wechat = '', gradeClass = '', note = '', now = Date.now() } = input;
   if (!DEPT_MAP[department]) throw new Error('部门不存在');
   if (!name?.trim()) throw new Error('请输入姓名');
   if (!MOBILE_RE.test(mobile)) throw new Error('请输入正确的 11 位手机号');
-  if (!wechat?.trim()) throw new Error('请输入微信号');
-  if (!gradeClass?.trim()) throw new Error('请输入年级与专业班级');
 
   const unfinished = s.candidates.find(
     (c) => c.department === department && c.mobile === mobile &&
       (c.status === 'waiting' || c.status === 'interviewing')
   );
   if (unfinished) {
-    // 重复取号：不产生任何变更（revision 不变），返回已有记录
+    // 重复登记：不产生任何变更（revision 不变），返回已有记录
     return { state: s, created: false, candidate: unfinished, existing: unfinished };
   }
 
@@ -90,13 +100,29 @@ export function registerCandidate(s: AppState, input: RegisterInput): { state: A
   const id = uuid();
   const candidate: Candidate = {
     id, department, number: `${department}${pad(seq)}`, seq,
-    name: name.trim(), mobile, wechat, gradeClass: gradeClass.trim(),
+    name: name.trim(), mobile, wechat: wechat.trim(), gradeClass: gradeClass.trim(),
     note: note.trim(), status: 'waiting', callCount: 0,
     registeredAt: now,
   };
   next.candidates.push(candidate);
   next.queueOrder[department].push(id);
   return { state: withStats(next), created: true, candidate };
+}
+
+export function registerCandidate(s: AppState, input: RegisterInput): { state: AppState; created: boolean; candidate: Candidate; existing?: Candidate } {
+  const { wechat, gradeClass } = input;
+  if (!wechat?.trim()) throw new Error('请输入微信号');
+  if (!gradeClass?.trim()) throw new Error('请输入年级与专业班级');
+  return enqueue(s, input);
+}
+
+/** 面试官补录：仅需 部门+姓名+手机号，微信/班级选填；同手机号本部门未完成时抛错提示 */
+export function addCandidate(s: AppState, input: StaffAddInput): { state: AppState; candidate: Candidate } {
+  const r = enqueue(s, input);
+  if (!r.created && r.existing) {
+    throw new Error(`该手机号在${DEPT_MAP[r.existing.department].name}已有登记（${r.existing.number}），无需补录`);
+  }
+  return { state: r.state, candidate: r.candidate };
 }
 
 export function callNext(s: AppState, department: DeptCode, now: number = Date.now()): AppState {

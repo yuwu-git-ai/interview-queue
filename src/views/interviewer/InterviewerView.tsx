@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LogOut, PhoneForwarded, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LogOut, PhoneForwarded, Sparkles, UserPlus, X } from 'lucide-react';
 import type { Candidate, DeptCode } from '@/shared/types';
-import { DEPARTMENTS, DEPT_COLOR } from '@/shared/constants';
+import { DEPARTMENTS, DEPT_COLOR, DEPT_MAP, MOBILE_RE } from '@/shared/constants';
 import { listByStatus } from '@/shared/engine';
 import type { FrontStore } from '@/src/lib/store';
 
@@ -10,6 +10,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [acting, setActing] = useState(false);
   const [busyDept, setBusyDept] = useState<DeptCode | null>(null);
+  const [adding, setAdding] = useState<DeptCode | null>(null);
 
   const act = async (dept: DeptCode | null, fn: () => Promise<void>) => {
     if (acting) return;
@@ -56,14 +57,24 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
                 <div className="font-black">
                   {d.name} <span className="text-sm font-normal text-slate-500">（面试室 {d.room}）</span>
                 </div>
-                <button
-                  disabled={waiting.length === 0 || acting}
-                  onClick={() => act(d.code, () => store.callNext(d.code))}
-                  className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-bold text-white disabled:opacity-40 ${col.bg}`}
-                >
-                  <PhoneForwarded className="h-4 w-4" />
-                  {busy ? '处理中…' : '呼叫下一位'}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setAdding(d.code)}
+                    title="现场没扫码的同学，手动录入进队列"
+                    className={`inline-flex items-center gap-1 rounded-lg border bg-white px-3 py-1.5 text-sm font-bold ${col.text} ${col.border} hover:bg-slate-50`}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    补录
+                  </button>
+                  <button
+                    disabled={waiting.length === 0 || acting}
+                    onClick={() => act(d.code, () => store.callNext(d.code))}
+                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-bold text-white disabled:opacity-40 ${col.bg}`}
+                  >
+                    <PhoneForwarded className="h-4 w-4" />
+                    {busy ? '处理中…' : '呼叫下一位'}
+                  </button>
+                </div>
               </header>
 
               <div className="p-3">
@@ -123,6 +134,8 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
           );
         })}
       </div>
+
+      {adding && <AddCandidateModal store={store} dept={adding} onClose={() => setAdding(null)} />}
     </div>
   );
 }
@@ -147,7 +160,7 @@ function CandidateRow({
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className={`font-mono text-base font-black ${col.text}`}>{cand.number}</span>
           <span className="truncate font-bold">{cand.name}</span>
-          <span className="truncate text-xs text-slate-400">{cand.gradeClass}</span>
+          <span className="truncate text-xs text-slate-400">{cand.gradeClass || cand.wechat || cand.mobile}</span>
           {expanded ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
           ) : (
@@ -169,7 +182,10 @@ function CandidateRow({
       {expanded && (
         <div className="mt-1.5 rounded-lg bg-slate-50 p-2 text-sm text-slate-600">
           <p>
-            手机号 {cand.mobile} · 微信号 {cand.wechat}
+            手机号 {cand.mobile}
+            {cand.wechat ? ` · 微信 ${cand.wechat}` : ''}
+            {cand.gradeClass ? ` · ${cand.gradeClass}` : ''}
+            {!cand.wechat && !cand.gradeClass && ' · 面试官补录'}
           </p>
           <p>登记于 {new Date(cand.registeredAt).toLocaleString('zh-CN')}</p>
           {cand.note && <p>备注：{cand.note}</p>}
@@ -229,6 +245,111 @@ function Login({ store, onOk }: { store: FrontStore; onOk: () => void }) {
           {busy ? '登录中…' : '登 录'}
         </button>
       </form>
+    </div>
+  );
+}
+
+/* ---------- 补录弹窗：现场没扫码的同学，面试官手动录入 ---------- */
+function AddCandidateModal({
+  store, dept, onClose,
+}: {
+  store: FrontStore;
+  dept: DeptCode;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({ name: '', mobile: '', wechat: '', gradeClass: '' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const d = DEPT_MAP[dept];
+  const col = DEPT_COLOR[dept];
+  const valid = !!form.name.trim() && MOBILE_RE.test(form.mobile);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit() {
+    if (!valid || busy) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await store.staffRegister({
+        department: dept,
+        name: form.name.trim(),
+        mobile: form.mobile,
+        wechat: form.wechat.trim(),
+        gradeClass: form.gradeClass.trim(),
+      });
+      onClose();
+    } catch (e: any) {
+      setErr(e?.message || '补录失败');
+      setBusy(false);
+    }
+  }
+
+  const inp =
+    'w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100';
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black text-slate-800">补录登记</h2>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mt-0.5 text-xs text-slate-400">
+          {d.name}（面试室 {d.room}）· 现场同学未扫码时由面试官录入
+        </p>
+
+        <div className="mt-4 space-y-3.5">
+          <label className="block">
+            <span className="text-sm font-bold text-slate-700">
+              真实姓名<span className="ml-0.5 text-rose-500">*</span>
+            </span>
+            <input className={`mt-1.5 ${inp}`} value={form.name} onChange={set('name')} placeholder="请输入姓名" />
+          </label>
+          <label className="block">
+            <span className="text-sm font-bold text-slate-700">
+              手机号<span className="ml-0.5 text-rose-500">*</span>
+            </span>
+            <input className={`mt-1.5 ${inp}`} inputMode="numeric" maxLength={11} value={form.mobile} onChange={set('mobile')} placeholder="11 位，用于查重与进度查询" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
+                微信号<span className="ml-1 text-xs font-normal text-slate-400">（选填）</span>
+              </span>
+              <input className={`mt-1.5 ${inp}`} value={form.wechat} onChange={set('wechat')} placeholder="微信号" />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
+                班级<span className="ml-1 text-xs font-normal text-slate-400">（选填）</span>
+              </span>
+              <input className={`mt-1.5 ${inp}`} value={form.gradeClass} onChange={set('gradeClass')} placeholder="如：25电子商务" />
+            </label>
+          </div>
+          {err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">{err}</p>}
+        </div>
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+          >
+            取消
+          </button>
+          <button
+            onClick={submit}
+            disabled={!valid || busy}
+            className={`flex-1 rounded-xl py-3 text-sm font-bold text-white transition active:scale-[0.98] disabled:bg-slate-300 ${col.bg}`}
+          >
+            {busy ? '添加中…' : `添加进${d.name}队列`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
