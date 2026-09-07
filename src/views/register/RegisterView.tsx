@@ -13,7 +13,7 @@ const inp =
 export default function RegisterView({ store }: { store: FrontStore }) {
   const [phase, setPhase] = useState<Phase>('dept');
   const [dept, setDept] = useState<DeptCode | ''>('');
-  const [form, setForm] = useState({ name: '', mobile: '', wechat: '', gradeClass: '', note: '' });
+  const [form, setForm] = useState({ name: '', mobile: '', wechat: '', gradeClass: '' });
   const [err, setErr] = useState('');
   const [ticket, setTicket] = useState<{ created: boolean; candidate: Candidate; ahead: number } | null>(null);
   const [results, setResults] = useState<LookupCandidate[]>([]);
@@ -171,7 +171,7 @@ function FormStep({
   dept, form, set, err, onBack, onSubmit,
 }: {
   dept: DeptCode;
-  form: { name: string; mobile: string; wechat: string; gradeClass: string; note: string };
+  form: { name: string; mobile: string; wechat: string; gradeClass: string };
   set: (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   err: string;
   onBack: () => void;
@@ -199,12 +199,8 @@ function FormStep({
           <input className={inp} value={form.wechat} onChange={set('wechat')} placeholder="请输入微信号" />
         </Field>
         <Field label="年级与专业班级" required>
-          <input className={inp} value={form.gradeClass} onChange={set('gradeClass')} placeholder="如：计科2201 / 机械2402" />
+          <input className={inp} value={form.gradeClass} onChange={set('gradeClass')} placeholder="如：25电子商务" />
         </Field>
-        <Field label="个人经历及特长" optional>
-          <textarea className={`${inp} min-h-24 resize-none`} value={form.note} onChange={set('note')} placeholder="选填，简要描述经历或特长" />
-        </Field>
-
         {err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">{err}</p>}
 
         <button
