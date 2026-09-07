@@ -4,3 +4,10 @@ html, body, #root { height: 100%; }
 body { @apply bg-slate-100 text-slate-900 antialiased; }
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* 大屏叫号闪播入场：新公告出现时轻微放大 + 淡入，配合 key 每次重新触发 */
+.iq-call-flash { animation: iq-call-flash 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes iq-call-flash {
+  from { transform: scale(0.985); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
