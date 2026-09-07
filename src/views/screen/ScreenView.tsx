@@ -11,7 +11,7 @@ export default function ScreenView({ store }: { store: FrontStore }) {
       {/* 顶部指引 */}
       <header className="flex items-center justify-between rounded-2xl bg-white px-4 py-2 shadow">
         <div className="flex items-center gap-2">
-          <span className="rounded-lg bg-rose-600 px-3 py-1 text-lg font-black text-white">当前所在：教208 · 候考等候室</span>
+          <span className="rounded-lg bg-rose-600 px-3 py-1 text-lg font-black text-white">当前所在：教208 · 等候室</span>
         </div>
         <div className="flex gap-4 text-sm font-bold text-slate-600">
           <span>

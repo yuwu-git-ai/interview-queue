@@ -54,7 +54,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
             <section key={d.code} className={`rounded-2xl border ${col.border} bg-white shadow`}>
               <header className={`flex items-center justify-between rounded-t-2xl ${col.soft} border-b px-4 py-2`}>
                 <div className="font-black">
-                  {d.name} <span className="text-sm font-normal text-slate-500">（教室 {d.room}）</span>
+                  {d.name} <span className="text-sm font-normal text-slate-500">（面试室 {d.room}）</span>
                 </div>
                 <button
                   disabled={waiting.length === 0 || acting}

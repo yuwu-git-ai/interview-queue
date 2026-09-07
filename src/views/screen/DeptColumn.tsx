@@ -37,7 +37,9 @@ export default function DeptColumn({ state, code }: { state: AppState; code: Dep
           <span className="text-lg font-black">{d.name}</span>
         </div>
         <div className="text-sm text-slate-500">
-          考场 {d.room} · 候考室 {WAIT_ROOM}
+          面试室 {d.room}
+          <span className="mx-1 text-slate-300">|</span>
+          等候室 {WAIT_ROOM}
         </div>
       </header>
 

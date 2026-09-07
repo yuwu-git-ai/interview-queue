@@ -55,7 +55,7 @@ export default function RegisterView({ store }: { store: FrontStore }) {
             </div>
             <div>
               <h1 className="text-xl font-black text-white">面试在线取号</h1>
-              <p className="text-xs text-slate-300">候考室 {WAIT_ROOM} · 扫码报到</p>
+              <p className="text-xs text-slate-300">等候室 {WAIT_ROOM} · 扫码报到</p>
             </div>
           </div>
           {/* 任意阶段都可点入进度查询 */}
@@ -120,40 +120,46 @@ function DeptStep({
   selected: DeptCode | '';
   onSelect: (d: DeptCode) => void;
 }) {
-  const active = DEPARTMENTS.filter((d) => d.code === selected);
   return (
     <div>
       <Card title="选择面试部门" subtitle="请选择您要面试的部门，领取对应序号">
-        <div className="grid grid-cols-2 gap-3">
+        <ul className="space-y-2.5">
           {DEPARTMENTS.map((d) => {
             const waiting = store.state.candidates.filter((c) => c.department === d.code && c.status === 'waiting').length;
             const col = DEPT_COLOR[d.code];
             const sel = selected === d.code;
             return (
-              <button
-                key={d.code}
-                onClick={() => onSelect(d.code)}
-                className={`group relative overflow-hidden rounded-2xl border-2 bg-white p-4 text-left shadow-sm transition active:scale-[0.97] ${
-                  sel ? `${col.border} ring-2 ${col.soft}` : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <span className={`grid h-9 w-9 place-items-center rounded-xl text-lg font-black text-white ${col.bg}`}>{d.code}</span>
-                  {sel && <CheckCircle2 className={`h-5 w-5 ${col.text}`} />}
-                </div>
-                <p className="mt-2.5 font-bold text-slate-800">{d.name}</p>
-                <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-                  <MapPin className="h-3 w-3" />
-                  教室 {d.room}
-                </p>
-                <p className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${waiting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                  <Users className="h-3 w-3" />
-                  {waiting ? `等待 ${waiting} 人` : '无需等待'}
-                </p>
-              </button>
+              <li key={d.code}>
+                <button
+                  onClick={() => onSelect(d.code)}
+                  className={`flex w-full items-center gap-3 rounded-2xl border-2 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.98] ${
+                    sel ? `${col.border} ring-2 ${col.soft}` : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl font-black text-white ${col.bg}`}>
+                    {d.code}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-black text-slate-800">{d.name}</span>
+                    <span className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      面试室 {d.room}
+                    </span>
+                  </span>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      waiting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}
+                  >
+                    <Users className="h-3 w-3" />
+                    {waiting ? `${waiting} 人等待` : '无需等待'}
+                  </span>
+                  {sel && <CheckCircle2 className={`h-5 w-5 shrink-0 ${col.text}`} />}
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </Card>
       <HintNote />
     </div>
@@ -177,7 +183,7 @@ function FormStep({
     !!form.name && /^1[3-9]\d{9}$/.test(form.mobile) && !!form.wechat && !!form.gradeClass;
 
   return (
-    <Card title="填写报名信息" subtitle={`已选：${d.name}（教室 ${d.room}）`}>
+    <Card title="填写报名信息" subtitle={`已选部门：${d.name} · 面试室 ${d.room}`}>
       <button onClick={onBack} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" />
         重新选择部门
@@ -260,7 +266,7 @@ function TicketView({
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${statusColor}`}>{statusText}</span>
         </div>
         <p className="mt-1 text-xs opacity-80">
-          {d.name} · 面试教室 {d.room}
+          {d.name} · 面试室 {d.room}
         </p>
       </div>
 
@@ -299,7 +305,11 @@ function TicketView({
 
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-blue-50 px-3.5 py-3 text-xs leading-relaxed text-blue-700">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          请在候考室（{WAIT_ROOM}）留意大屏叫号与语音播报，轮到您时前往对应教室面试。
+          <span>
+            请在等候室（{WAIT_ROOM}）留意大屏叫号与语音播报。
+            <br />
+            轮到您时，请前往上方对应的面试室参加面试。
+          </span>
         </div>
 
         <button
@@ -365,8 +375,9 @@ function QueryView({
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusColor}`}>{statusText}</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  {d.name} · {c.gradeClass} · 教室 {d.room}
+                <p className="mt-1.5 text-sm font-bold text-slate-600">{d.name}</p>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {c.gradeClass} · 面试室 {d.room}
                 </p>
                 {c.status === 'waiting' && c.ahead >= 0 && (
                   <p className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-slate-700">
@@ -433,7 +444,9 @@ function InfoRow({ k, v }: { k: string; v: string }) {
 function HintNote() {
   return (
     <p className="mt-4 px-2 text-center text-xs leading-relaxed text-slate-400">
-      每人每部门限取一个号 · 填写后请留意候考室大屏叫号
+      每人每部门限取一个号。
+      <br />
+      取号后请在等候室（{WAIT_ROOM}）留意大屏叫号。
     </p>
   );
 }
