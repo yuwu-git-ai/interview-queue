@@ -81,15 +81,15 @@ export default function AnnounceBar({ state }: { state: AppState }) {
       {live ? (
         <div
           key={live.id}
-          className="iq-call-flash flex items-center gap-3 rounded-xl bg-blue-50 px-4 py-4 ring-2 ring-blue-300"
+          className="iq-call-flash flex items-center gap-3 rounded-xl bg-blue-50 px-3 py-3 ring-2 ring-blue-300 sm:px-4 sm:py-4"
         >
-          <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-xl text-2xl font-black text-white ${DEPT_COLOR[live.department].bg}`}>
+          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl font-black text-white sm:h-14 sm:w-14 sm:text-2xl ${DEPT_COLOR[live.department].bg}`}>
             {live.department}
           </div>
-          <div className="text-3xl font-black leading-tight text-slate-900">{live.text}</div>
+          <div className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl">{live.text}</div>
         </div>
       ) : (
-        <div className="py-6 text-center text-xl text-slate-400">等待面试官呼叫…（扫码可在线取号排队）</div>
+        <div className="py-5 text-center text-base text-slate-400 sm:py-6 sm:text-xl">等待面试官呼叫…（扫码可在线取号排队）</div>
       )}
     </div>
   );
