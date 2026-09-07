@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LogOut, PhoneForwarded, Sparkles, UserPlus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, ClipboardList, LogOut, PhoneForwarded, Sparkles, UserPlus, X } from 'lucide-react';
 import type { Candidate, DeptCode } from '@/shared/types';
 import { DEPARTMENTS, DEPT_COLOR, DEPT_MAP, MOBILE_RE } from '@/shared/constants';
 import { listByStatus } from '@/shared/engine';
 import type { FrontStore } from '@/src/lib/store';
+import ArchiveModal from './ArchiveModal';
 
 export default function InterviewerView({ store }: { store: FrontStore }) {
   const [authed, setAuthed] = useState<boolean>(() => store.kind === 'local' || !!sessionStorage.getItem('iq_token'));
@@ -11,6 +12,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
   const [acting, setActing] = useState(false);
   const [busyDept, setBusyDept] = useState<DeptCode | null>(null);
   const [adding, setAdding] = useState<DeptCode | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   const act = async (dept: DeptCode | null, fn: () => Promise<void>) => {
     if (acting) return;
@@ -44,6 +46,21 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
       <p className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">
         叫号将即时同步到等候室大屏并语音播报（需大屏端语音开启）。
       </p>
+
+      {/* 总览 + 名单汇总 */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+        <span className="text-sm font-bold text-slate-700">
+          已登记 {store.state.stats.total} · 面试中 {store.state.stats.interviewing} · 等待 {store.state.stats.waiting} · 已完成{' '}
+          {store.state.stats.completed}
+        </span>
+        <button
+          onClick={() => setShowArchive(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-slate-900"
+        >
+          <ClipboardList className="h-4 w-4" />
+          名单汇总 / 导出
+        </button>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {DEPARTMENTS.map((d) => {
@@ -136,6 +153,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
       </div>
 
       {adding && <AddCandidateModal store={store} dept={adding} onClose={() => setAdding(null)} />}
+      {showArchive && <ArchiveModal store={store} onClose={() => setShowArchive(false)} />}
     </div>
   );
 }
