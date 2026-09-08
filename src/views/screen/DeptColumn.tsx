@@ -27,7 +27,7 @@ export default function DeptColumn({ state, code }: { state: AppState; code: Dep
   const d = DEPT_MAP[code];
   const c = DEPT_COLOR[code];
   const { interviewing, waiting, completed } = listByStatus(state, code);
-  const current = interviewing[0];
+  const sole = interviewing.length === 1 ? interviewing[0] : undefined;
 
   return (
     <section className={`flex min-h-0 flex-col rounded-2xl border-t-4 ${c.border} bg-white shadow`}>
@@ -44,24 +44,39 @@ export default function DeptColumn({ state, code }: { state: AppState; code: Dep
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 pb-3 scrollbar-none">
-        {/* 面试中 */}
+        {/* 面试中（支持一组多人同时面试） */}
         <div className={`rounded-xl ${c.soft} border ${c.border} p-3`}>
-          <div className="mb-1 flex items-center gap-1 text-xs font-bold text-slate-500">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-500">
             <UserCheck className="h-3.5 w-3.5" />
             面试中
+            {interviewing.length > 1 && (
+              <span className={`rounded px-1.5 py-0.5 text-white ${c.bg}`}>{interviewing.length} 人一组</span>
+            )}
           </div>
-          {current ? (
+          {interviewing.length === 0 ? (
+            <div className="py-4 text-center text-slate-400">— 暂无面试 —</div>
+          ) : sole ? (
             <div className="flex items-end justify-between">
               <div>
-                <div className={`text-4xl font-black ${c.text}`}>{current.number}</div>
+                <div className={`text-4xl font-black ${c.text}`}>{sole.number}</div>
                 <div className="text-xl font-bold">
-                  {current.name} · {current.gradeClass}
+                  {sole.name} · {sole.gradeClass || sole.wechat}
                 </div>
               </div>
-              <Elapsed start={current.interviewStartedAt} />
+              <Elapsed start={sole.interviewStartedAt} />
             </div>
           ) : (
-            <div className="py-4 text-center text-slate-400">— 暂无面试 —</div>
+            <ul className="space-y-1">
+              {interviewing.map((x) => (
+                <li key={x.id} className="flex items-center justify-between rounded-lg bg-white/70 px-2.5 py-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-2xl font-black ${c.text}`}>{x.number}</span>
+                    <span className="truncate font-bold">{x.name}</span>
+                  </div>
+                  <Elapsed start={x.interviewStartedAt} />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

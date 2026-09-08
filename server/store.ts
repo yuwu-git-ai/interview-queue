@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppState, Candidate, DeptCode } from '../shared/types';
+import type { AppState, Candidate, DeptCode, Judgment } from '../shared/types';
 import {
-  createEmptyState, registerCandidate, addCandidate as engAddCandidate, callNext as engCallNext, recall as engRecall,
-  reorder as engReorder, completeInterview as engComplete, waitingList, type RegisterInput, type StaffAddInput, type ReorderAction,
+  createEmptyState, registerCandidate, addCandidate as engAddCandidate, callCandidates as engCallCandidates, recall as engRecall,
+  reorder as engReorder, completeInterview as engComplete, addComment as engAddComment, setJudgment as engSetJudgment,
+  advanceSession as engAdvanceSession, hydrateState, waitingList, type RegisterInput, type StaffAddInput, type ReorderAction,
 } from '../shared/engine';
 
 export interface RegisterResult { created: boolean; candidate: Candidate; }
@@ -26,7 +27,8 @@ function save(state: AppState, file: string) {
 function load(file: string): AppState {
   if (!fs.existsSync(file)) return createEmptyState();
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as AppState;
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as AppState;
+    return hydrateState(raw); // 兼容无 场次/归档 字段的旧状态
   } catch (e) {
     console.error('[store] 状态文件损坏，用空状态兜底:', e);
     return createEmptyState();
@@ -39,10 +41,13 @@ export interface ServerStore {
   overwrite(next: AppState): void;
   register(input: RegisterInput): RegisterResult;
   add(input: StaffAddInput): Candidate;
-  callNext(department: DeptCode): AppState;
+  advanceSession(): AppState;
+  call(department: DeptCode, ids: string[]): AppState;
   recall(department: DeptCode): AppState;
   reorder(department: DeptCode, candidateId: string, action: ReorderAction): AppState;
   complete(candidateId: string): AppState;
+  addComment(candidateId: string, text: string): AppState;
+  setJudgment(candidateId: string, judgment: Judgment | null): AppState;
   lookupByMobile(mobile: string): Candidate[];
   verifyPassword(pw: string): boolean;
 }
@@ -67,10 +72,18 @@ export function createServerStore(file = process.env.STATE_FILE || './data/state
       commit(r.state);
       return r.candidate;
     },
-    callNext: (department) => { const next = engCallNext(state, department); if (next !== state) commit(next); return state; },
+    // 开启新一天：归档当天→已过号收尾、清空看板，号码重排
+    advanceSession: () => {
+      const next = engAdvanceSession(state);
+      commit(next);
+      return state;
+    },
+    call: (department, ids) => { const next = engCallCandidates(state, department, ids); commit(next); return state; },
     recall: (department) => { const next = engRecall(state, department); if (next !== state) commit(next); return state; },
     reorder: (department, candidateId, action) => { const next = engReorder(state, department, candidateId, action); if (next !== state) commit(next); return state; },
     complete: (candidateId) => { const next = engComplete(state, candidateId); if (next !== state) commit(next); return state; },
+    addComment: (candidateId, text) => { const next = engAddComment(state, candidateId, text); commit(next); return state; },
+    setJudgment: (candidateId, judgment) => { const next = engSetJudgment(state, candidateId, judgment); commit(next); return state; },
     lookupByMobile: (mobile) => state.candidates.filter((c) => c.mobile === mobile),
     verifyPassword: (pw) => pw === (process.env.INTERVIEWER_PASSWORD || '123'),
   };

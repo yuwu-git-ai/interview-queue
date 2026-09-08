@@ -34,15 +34,20 @@ describe('API', () => {
     expect(dup.body.candidate.name).toBe('钱心雨');
   });
   it('未登录访问面试官端点 → 401', async () => {
-    const res = await request(app).post('/api/interviewer/call-next').send({ department: 'A' });
+    const res = await request(app).post('/api/interviewer/call').send({ department: 'A', ids: [] });
     expect(res.status).toBe(401);
   });
-  it('登录(123)后 call-next 可用且 revision 增加、产生公告', async () => {
+  it('登录(123)后选人叫号可用且 revision 增加、产生公告', async () => {
     const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
-    expect(login.status).toBe(200);
     const token = login.body.token;
-    const before = (await request(app).get('/api/state')).body.revision;
-    const call = await request(app).post('/api/interviewer/call-next').send({ department: 'A' }).set('Authorization', `Bearer ${token}`);
+    const st = (await request(app).get('/api/state')).body;
+    const aId = st.candidates.find((c: any) => c.department === 'A' && c.status === 'waiting')?.id;
+    expect(aId).toBeTruthy();
+    const before = st.revision;
+    const call = await request(app)
+      .post('/api/interviewer/call')
+      .send({ department: 'A', ids: [aId] })
+      .set('Authorization', `Bearer ${token}`);
     expect(call.status).toBe(200);
     const after = (await request(app).get('/api/state')).body.revision;
     expect(after).toBeGreaterThan(before);
@@ -86,5 +91,39 @@ describe('API', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(dup.status).toBe(400);
     expect(dup.body.error).toContain('已有登记');
+  });
+  it('登录后追加备注 + 设/清临时判断', async () => {
+    const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
+    const token = login.body.token;
+    const id = (await request(app).get('/api/state')).body.candidates[0].id;
+    const c1 = await request(app).post('/api/interviewer/comment').send({ candidateId: id, text: '沟通流畅' }).set('Authorization', `Bearer ${token}`);
+    expect(c1.status).toBe(200);
+    const st1 = (await request(app).get('/api/state')).body.candidates.find((c: any) => c.id === id);
+    expect(st1.comments.length).toBe(1);
+    const j1 = await request(app).post('/api/interviewer/judgment').send({ candidateId: id, judgment: 'pass' }).set('Authorization', `Bearer ${token}`);
+    expect(j1.status).toBe(200);
+    expect((await request(app).get('/api/state')).body.candidates.find((c: any) => c.id === id).judgment).toBe('pass');
+    const j2 = await request(app).post('/api/interviewer/judgment').send({ candidateId: id, judgment: null }).set('Authorization', `Bearer ${token}`);
+    expect(j2.status).toBe(200);
+    expect((await request(app).get('/api/state')).body.candidates.find((c: any) => c.id === id).judgment).toBeUndefined();
+  });
+  it('未登录备注 → 401', async () => {
+    const r = await request(app).post('/api/interviewer/comment').send({ candidateId: 'x', text: 'hi' });
+    expect(r.status).toBe(401);
+  });
+  it('未登录开启新一天 → 401', async () => {
+    const res = await request(app).post('/api/interviewer/new-session').send({});
+    expect(res.status).toBe(401);
+  });
+  it('登录后开启新一天 → 全部归档、看板清空、场次+1', async () => {
+    const before = (await request(app).get('/api/state')).body;
+    const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
+    const token = login.body.token;
+    const res = await request(app).post('/api/interviewer/new-session').send({}).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const after = (await request(app).get('/api/state')).body;
+    expect(after.currentSession).toBe(before.currentSession + 1);
+    expect(after.candidates.length).toBe(0);
+    expect(after.archive.length).toBe(before.candidates.length);
   });
 });

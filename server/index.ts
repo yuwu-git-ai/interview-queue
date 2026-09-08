@@ -61,8 +61,8 @@ export function buildApp(opts: Options = {}) {
     res.json({ token });
   });
 
-  app.post('/api/interviewer/call-next', auth, (req, res) => {
-    try { const s = store.callNext(req.body.department); res.json({ ok: true, revision: s.revision }); }
+  app.post('/api/interviewer/call', auth, (req, res) => {
+    try { const s = store.call(req.body.department, req.body.ids); res.json({ ok: true, revision: s.revision }); }
     catch (e: any) { res.status(400).json({ error: e.message }); }
   });
 
@@ -81,11 +81,33 @@ export function buildApp(opts: Options = {}) {
     catch (e: any) { res.status(400).json({ error: e.message }); }
   });
 
+  // 追加一条面试备注（多面试官并发写各自追加，不覆盖）
+  app.post('/api/interviewer/comment', auth, (req, res) => {
+    try { const s = store.addComment(req.body.candidateId, req.body.text); res.json({ ok: true, revision: s.revision }); }
+    catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // 设置/清除临时判断：通过 | 不通过 | 待商讨（传 judgment:null 清除）
+  app.post('/api/interviewer/judgment', auth, (req, res) => {
+    try { const s = store.setJudgment(req.body.candidateId, req.body.judgment ?? null); res.json({ ok: true, revision: s.revision }); }
+    catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
   // 面试官补录（现场没扫码的同学）：仅需 部门+姓名+手机号，微信/班级选填
   app.post('/api/interviewer/register', auth, (req, res) => {
     try {
       const c = store.add(req.body);
       res.json({ created: true, candidate: c });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  // 开启新一天：归档当天(未完成按已过号)→清空看板→号码重排（前端已二次确认）
+  app.post('/api/interviewer/new-session', auth, (req, res) => {
+    try {
+      const s = store.advanceSession();
+      res.json({ ok: true, revision: s.revision, currentSession: s.currentSession });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }

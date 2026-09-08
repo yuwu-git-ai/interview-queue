@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Download, Search, X } from 'lucide-react';
-import type { DeptCode, Status } from '@/shared/types';
+import { Download, History, Search, X } from 'lucide-react';
+import type { Candidate, DeptCode, Judgment, Status } from '@/shared/types';
 import { DEPARTMENTS, DEPT_COLOR, DEPT_MAP } from '@/shared/constants';
 import type { FrontStore } from '@/src/lib/store';
+import { buildXlsx, downloadBlob } from '@/src/lib/xlsx';
 
 const STATUS_TEXT: Record<Status, string> = {
   waiting: '等待面试',
@@ -17,18 +18,33 @@ const STATUS_COLOR: Record<Status, string> = {
   no_show: 'bg-slate-200 text-slate-600',
 };
 
+function judgmentText(j?: Judgment): string {
+  return j === 'pass' ? '通过' : j === 'fail' ? '不通过' : j === 'discuss' ? '待商讨' : '';
+}
+const JUDGMENT_COLOR: Record<Judgment, string> = {
+  pass: 'bg-emerald-100 text-emerald-700',
+  fail: 'bg-rose-100 text-rose-700',
+  discuss: 'bg-amber-100 text-amber-700',
+};
+
 function csvEsc(v: unknown): string {
   return `"${String(v ?? '').replace(/"/g, '""')}"`;
 }
 
-/** 已登记的完整名单汇总（含已完成）＋ 微信/手机展示 ＋ CSV 导出 */
+/** 名单汇总：当前天 + 历史场次归档，可展开看备注/判断，导出 CSV */
 export default function ArchiveModal({ store, onClose }: { store: FrontStore; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [dept, setDept] = useState<'' | DeptCode>('');
   const [status, setStatus] = useState<'' | Status | 'all'>('all');
+  const [day, setDay] = useState<string>('');
 
-  const rows = store.state.candidates.filter((c) => {
+  const s = store.state;
+  const all = [...s.archive, ...s.candidates];
+  const days = Array.from(new Set(all.map((c) => c.day))).sort((a, b) => (a < b ? -1 : 1));
+
+  const rows = all.filter((c) => {
     if (dept && c.department !== dept) return false;
+    if (day && c.day !== day) return false;
     if (status !== 'all' && c.status !== status) return false;
     if (q.trim()) {
       const needle = q.trim().toLowerCase();
@@ -38,27 +54,37 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
     return true;
   });
 
-  const exportCsv = () => {
-    const head = ['部门', '号码', '姓名', '状态', '微信号', '手机号', '班级', '面试结果', '登记时间'];
+  const makeTable = () => {
+    const header = ['场次/日期', '部门', '号码', '姓名', '状态', '临时判断', '微信号', '手机号', '班级', '面试备注', '登记时间'];
     const body = rows.map((c) => [
+      c.day,
       DEPT_MAP[c.department].name,
       c.number,
       c.name,
       STATUS_TEXT[c.status],
+      judgmentText(c.judgment),
       c.wechat,
       c.mobile,
       c.gradeClass,
-      c.result === 'hired' ? '通过' : c.result === 'rejected' ? '淘汰' : c.result === 'pending' ? '待定' : '',
+      (c.comments || []).map((cm) => `${new Date(cm.at).toLocaleString('zh-CN')}：${cm.text}`).join(' | '),
       new Date(c.registeredAt).toLocaleString('zh-CN'),
     ]);
-    const csv = [head, ...body].map((r) => r.map(csvEsc).join(',')).join('\r\n');
+    return { header, body };
+  };
+
+  const stamp = () => `_第${s.currentSession}天_${new Date().toISOString().slice(0, 10)}`;
+
+  const exportCsv = () => {
+    const { header, body } = makeTable();
+    const csv = [header, ...body].map((r) => r.map(csvEsc).join(',')).join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `面试名单汇总_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `面试名单汇总${stamp()}.csv`);
+  };
+
+  const exportExcel = () => {
+    const { header, body } = makeTable();
+    const blob = buildXlsx('名单汇总', header, body);
+    downloadBlob(blob, `面试名单汇总${stamp()}.xlsx`);
   };
 
   const sel =
@@ -73,15 +99,27 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <div>
-            <h2 className="text-lg font-black text-slate-800">名单汇总（共 {store.state.candidates.length} 人）</h2>
-            <p className="text-xs text-slate-400">含已完成·含联系方式，可搜索 / 筛选 / 导出 CSV</p>
+            <h2 className="flex items-center gap-2 text-lg font-black text-slate-800">
+              <History className="h-5 w-5 text-slate-400" />
+              名单汇总
+              <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-black text-white">当前第 {s.currentSession} 天</span>
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-400">
+              共 {all.length} 人（含历史归档 {s.archive.length} 人）· 点条目可展开看备注 · 可搜索 / 筛选 / 导出 CSV
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={exportCsv}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-900"
+              onClick={exportExcel}
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700"
             >
               <Download className="h-4 w-4" />
+              导出 Excel
+            </button>
+            <button
+              onClick={exportCsv}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+            >
               导出 CSV
             </button>
             <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -101,6 +139,14 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
+          <select value={day} onChange={(e) => setDay(e.target.value)} className={sel}>
+            <option value="">全部场次</option>
+            {days.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
           <select value={dept} onChange={(e) => setDept(e.target.value as '' | DeptCode)} className={sel}>
             <option value="">全部部门</option>
             {DEPARTMENTS.map((d) => (
@@ -124,50 +170,92 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
             <div className="py-14 text-center text-sm text-slate-400">没有符合条件的记录</div>
           ) : (
             <ul className="space-y-1.5">
-              {rows.map((c) => {
-                const col = DEPT_COLOR[c.department];
-                const copy = async () => {
-                  try {
-                    await navigator.clipboard.writeText(c.wechat || c.mobile);
-                  } catch {
-                    /* ignore */
-                  }
-                };
-                return (
-                  <li key={c.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-base font-black text-white ${col.bg}`}>
-                      {c.department}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2">
-                        <span className={`font-mono text-base font-black ${col.text}`}>{c.number}</span>
-                        <span className="font-bold text-slate-800">{c.name}</span>
-                        <span className="text-xs text-slate-400">{c.gradeClass}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_COLOR[c.status]}`}>{STATUS_TEXT[c.status]}</span>
-                      </div>
-                      <p className="mt-0.5 truncate text-xs text-slate-500">
-                        微信 {c.wechat || '—'} · 手机 {c.mobile}
-                      </p>
-                    </div>
-                    <button
-                      onClick={copy}
-                      title="复制微信号"
-                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                    >
-                      复制微信
-                    </button>
-                  </li>
-                );
-              })}
+              {rows.map((c) => (
+                <ArchiveRow key={c.id} cand={c} />
+              ))}
             </ul>
           )}
         </div>
 
         {/* 底部统计 */}
         <div className="border-t border-slate-100 px-5 py-2 text-xs text-slate-400">
-          显示 {rows.length} / {store.state.candidates.length} 人
+          显示 {rows.length} / {all.length} 人
         </div>
       </div>
     </div>
+  );
+}
+
+function ArchiveRow({ cand }: { cand: Candidate }) {
+  const [open, setOpen] = useState(false);
+  const col = DEPT_COLOR[cand.department];
+  const jt = judgmentText(cand.judgment);
+  const comments = cand.comments || [];
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(cand.wechat || cand.mobile);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <li className={`rounded-xl ${open ? 'bg-white ring-1 ring-slate-200' : 'bg-slate-50'}`}>
+      {/* 概要行：点击展开 */}
+      <div className="flex cursor-pointer items-center gap-3 px-3 py-2.5" onClick={() => setOpen((o) => !o)}>
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-base font-black text-white ${col.bg}`}>
+          {cand.department}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-mono text-base font-black text-slate-800">{cand.number}</span>
+            <span className="font-bold text-slate-800">{cand.name}</span>
+            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-bold text-slate-600">{cand.day}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_COLOR[cand.status]}`}>{STATUS_TEXT[cand.status]}</span>
+            {jt && <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${JUDGMENT_COLOR[cand.judgment!]}`}>{jt}</span>}
+            {comments.length > 0 && (
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-600">备注 {comments.length}</span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            微信 {cand.wechat || '—'} · 手机 {cand.mobile} · {cand.gradeClass || '无班级'}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-bold text-slate-400">{open ? '收起 ▲' : '查看 ▼'}</span>
+        <button
+          onClick={copy}
+          title="复制微信号"
+          className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+        >
+          复制微信
+        </button>
+      </div>
+
+      {/* 展开详情：判断 + 备注 */}
+      {open && (
+        <div className="border-t border-dashed border-slate-200 px-4 py-3">
+          <p className="text-xs text-slate-400">临时判断：{jt ? <b className="text-slate-700">{jt}</b> : '未填写'}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">
+            面试备注{comments.length > 0 ? `（${comments.length}）` : ''}
+          </p>
+          {comments.length === 0 ? (
+            <p className="mt-1 text-sm text-slate-400">暂无备注</p>
+          ) : (
+            <ul className="mt-1 space-y-1.5">
+              {comments.map((cm) => (
+                <li key={cm.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{cm.text}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{new Date(cm.at).toLocaleString('zh-CN')}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {cand.note && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">报名备注：{cand.note}</p>
+          )}
+        </div>
+      )}
+    </li>
   );
 }

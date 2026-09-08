@@ -25,8 +25,8 @@ describe('ServerStore 持久化', () => {
   });
   it('revision 单调递增', () => {
     const r0 = store.getState().revision;
-    store.register({ department: 'B', name: 'x', mobile: '13800000002', wechat: 'w', gradeClass: 'c', note: '' });
-    store.callNext('B');
+    const r = store.register({ department: 'B', name: 'x', mobile: '13800000002', wechat: 'w', gradeClass: 'c', note: '' });
+    store.call('B', [r.candidate.id]);
     expect(store.getState().revision).toBeGreaterThan(r0);
   });
   it('overwrite 替换并落盘', () => {

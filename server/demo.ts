@@ -1,5 +1,5 @@
 import type { AppState } from '../shared/types';
-import { createEmptyState, registerCandidate, callNext } from '../shared/engine';
+import { createEmptyState, registerCandidate, callCandidates, completeInterview } from '../shared/engine';
 
 /** 生成一套可视化的演示状态：4 部门各若干等待 + 每部门 1 面试中 + 若干已完成 */
 export function demoState(now = Date.now()): AppState {
@@ -24,10 +24,14 @@ export function demoState(now = Date.now()): AppState {
       i += 1;
     });
   });
-  // 每部门呼叫 2 位让看板有"面试中 + 已完成"
+  // 让看板呈现"面试中 + 已完成"：每部门 叫第一位→完成→叫第二位(在面)
   (['A', 'B', 'C', 'D'] as const).forEach((dept) => {
-    s = callNext(s, dept, now - 3 * 60000);
-    s = callNext(s, dept, now - 1 * 60000);
+    const ids = s.candidates.filter((c) => c.department === dept && c.status === 'waiting').map((c) => c.id);
+    if (ids[0]) {
+      s = callCandidates(s, dept, [ids[0]], now - 4 * 60000);
+      s = completeInterview(s, ids[0], now - 2 * 60000);
+    }
+    if (ids[1]) s = callCandidates(s, dept, [ids[1]], now - 1 * 60000);
   });
   return s;
 }

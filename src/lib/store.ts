@@ -1,5 +1,6 @@
 import type { AppState, Candidate, DeptCode } from '@/shared/types';
-import { registerCandidate, addCandidate, callNext, recall, reorder, completeInterview, createEmptyState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
+import type { Judgment } from '@/shared/types';
+import { registerCandidate, addCandidate, advanceSession, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, createEmptyState, hydrateState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
 
 const LS_KEY = 'interview_queue_state_v1';
 const LS_LOCAL_PW = 'iq_local_pw';
@@ -14,12 +15,15 @@ export interface FrontStore {
   refresh(): Promise<void>;
   register(input: RegisterInput & { department: DeptCode }): Promise<{ created: boolean; candidate: Candidate; ahead: number }>;
   staffRegister(input: StaffAddInput): Promise<Candidate>;
+  startNewSession(): Promise<void>;
   lookup(mobile: string): Promise<LookupCandidate[]>;
   login(pw: string): Promise<string>;
-  callNext(dept: DeptCode): Promise<void>;
+  call(dept: DeptCode, ids: string[]): Promise<void>;
   recall(dept: DeptCode): Promise<void>;
   reorder(dept: DeptCode, candidateId: string, action: 'top' | 'up' | 'down'): Promise<void>;
   complete(candidateId: string): Promise<void>;
+  comment(candidateId: string, text: string): Promise<void>;
+  judge(candidateId: string, judgment: Judgment | null): Promise<void>;
 }
 
 /** 探测后端可用性 */
@@ -86,14 +90,18 @@ function createServerStore(): FrontStore {
       await refreshNow();
       return r.candidate;
     },
+    startNewSession: async () => {
+      await call('/api/interviewer/new-session', 'POST', {});
+      await refreshNow();
+    },
     lookup: async (mobile) => call(`/api/lookup?mobile=${encodeURIComponent(mobile)}`),
     login: async (pw) => {
       const r = await call('/api/interviewer/login', 'POST', { password: pw });
       setToken(r.token);
       return r.token;
     },
-    callNext: async (dept) => {
-      await call('/api/interviewer/call-next', 'POST', { department: dept });
+    call: async (dept, ids) => {
+      await call('/api/interviewer/call', 'POST', { department: dept, ids });
       await refreshNow();
     },
     recall: async (dept) => {
@@ -106,6 +114,14 @@ function createServerStore(): FrontStore {
     },
     complete: async (candidateId) => {
       await call('/api/interviewer/complete', 'POST', { candidateId });
+      await refreshNow();
+    },
+    comment: async (candidateId, text) => {
+      await call('/api/interviewer/comment', 'POST', { candidateId, text });
+      await refreshNow();
+    },
+    judge: async (candidateId, judgment) => {
+      await call('/api/interviewer/judgment', 'POST', { candidateId, judgment });
       await refreshNow();
     },
   };
@@ -122,7 +138,7 @@ function createLocalStore(): FrontStore {
   function loadLocal(): AppState {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) return JSON.parse(raw) as AppState;
+      if (raw) return hydrateState(JSON.parse(raw) as AppState);
     } catch {
       /* ignore */
     }
@@ -179,6 +195,9 @@ function createLocalStore(): FrontStore {
       bump(r.state);
       return r.candidate;
     },
+    startNewSession: async () => {
+      bump(advanceSession(holder.state));
+    },
     lookup: async (mobile) =>
       holder.state.candidates
         .filter((c) => c.mobile === mobile)
@@ -187,8 +206,8 @@ function createLocalStore(): FrontStore {
       if (pw !== (localStorage.getItem(LS_LOCAL_PW) || '123')) throw Object.assign(new Error('密码错误'), { status: 401 });
       return 'local-token';
     },
-    callNext: async (dept) => {
-      bump(callNext(holder.state, dept));
+    call: async (dept, ids) => {
+      bump(callCandidates(holder.state, dept, ids));
     },
     recall: async (dept) => {
       bump(recall(holder.state, dept));
@@ -198,6 +217,12 @@ function createLocalStore(): FrontStore {
     },
     complete: async (candidateId) => {
       bump(completeInterview(holder.state, candidateId));
+    },
+    comment: async (candidateId, text) => {
+      bump(addComment(holder.state, candidateId, text));
+    },
+    judge: async (candidateId, judgment) => {
+      bump(setJudgment(holder.state, candidateId, judgment));
     },
   };
 }
