@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, CalendarPlus, ClipboardList, LogOut, PhoneForwarded, Sparkles, UserPlus, X } from 'lucide-react';
-import type { DeptCode, Judgment } from '@/shared/types';
+import { ArrowDown, ArrowUp, CalendarPlus, ClipboardList, LogOut, PhoneForwarded, Sparkles, Trash2, UserPlus, X } from 'lucide-react';
+import type { Candidate, DeptCode, Judgment } from '@/shared/types';
 import { DEPARTMENTS, DEPT_COLOR, DEPT_MAP, MOBILE_RE } from '@/shared/constants';
 import { listByStatus } from '@/shared/engine';
 import type { FrontStore } from '@/src/lib/store';
@@ -80,6 +80,7 @@ function DeptCard({ store, code, onAdd, onRecord }: { store: FrontStore; code: D
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [del, setDel] = useState<Candidate | null>(null);
   const { interviewing, waiting } = listByStatus(store.state, code);
 
   const run = async (fn: () => Promise<void>) => {
@@ -110,6 +111,7 @@ function DeptCard({ store, code, onAdd, onRecord }: { store: FrontStore; code: D
   const reorder = (candId: string, action: 'top' | 'up' | 'down') => run(() => store.reorder(code, candId, action));
 
   return (
+    <>
     <section className={`flex min-h-0 flex-col rounded-2xl border ${col.border} bg-white shadow`}>
       <header className={`flex items-center justify-between rounded-t-2xl ${col.soft} border-b px-4 py-2`}>
         <div className="font-black">
@@ -230,6 +232,13 @@ function DeptCard({ store, code, onAdd, onRecord }: { store: FrontStore; code: D
                       <MiniBtn title="下移" disabled={i === waiting.length - 1} onClick={() => reorder(w.id, 'down')}>
                         <ArrowDown className="h-3.5 w-3.5" />
                       </MiniBtn>
+                      <button
+                        onClick={() => setDel(w)}
+                        title="删除这条(误录/测试号)"
+                        className="rounded border border-slate-200 bg-white p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </li>
                 ))}
@@ -249,6 +258,55 @@ function DeptCard({ store, code, onAdd, onRecord }: { store: FrontStore; code: D
         </div>
       </div>
     </section>
+    {del && (
+      <DeleteConfirm
+        name={`${del.number} ${del.name}`}
+        sub={`从当前队列/名单中删除「${DEPT_MAP[del.department].name}」这一条，不可恢复。号码不复用。`}
+        busy={busy}
+        onCancel={() => setDel(null)}
+        onConfirm={() =>
+          run(async () => {
+            await store.remove(del.id);
+            setSel({});
+            setDel(null);
+          })
+        }
+      />
+    )}
+    </>
+  );
+}
+
+/* ---------- 通用删除确认弹窗 ---------- */
+function DeleteConfirm({
+  name, sub, busy, onCancel, onConfirm,
+}: {
+  name: string;
+  sub: string;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-900/50 p-4" onClick={busy ? undefined : onCancel}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-black text-rose-600">删除这条记录？</h3>
+        <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{name}</p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-500">{sub}</p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onCancel} disabled={busy} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40"
+          >
+            {busy ? '删除中…' : '确认删除'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -93,6 +93,12 @@ export function buildApp(opts: Options = {}) {
     catch (e: any) { res.status(400).json({ error: e.message }); }
   });
 
+  // 删除一条记录（当前队列误录/测试号，或历史归档里需要清除的数据）
+  app.post('/api/interviewer/remove', auth, (req, res) => {
+    try { const s = store.remove(req.body.candidateId); res.json({ ok: true, revision: s.revision }); }
+    catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
   // 面试官补录（现场没扫码的同学）：仅需 部门+姓名+手机号，微信/班级选填
   app.post('/api/interviewer/register', auth, (req, res) => {
     try {

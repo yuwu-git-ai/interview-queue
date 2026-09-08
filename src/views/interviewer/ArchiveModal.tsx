@@ -37,6 +37,7 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
   const [dept, setDept] = useState<'' | DeptCode>('');
   const [status, setStatus] = useState<'' | Status | 'all'>('all');
   const [day, setDay] = useState<string>('');
+  const [del, setDel] = useState<Candidate | null>(null);
 
   const s = store.state;
   const all = [...s.archive, ...s.candidates];
@@ -91,6 +92,7 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
     'rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none';
 
   return (
+    <>
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-3" onClick={onClose}>
       <div
         className="flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
@@ -171,7 +173,7 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
           ) : (
             <ul className="space-y-1.5">
               {rows.map((c) => (
-                <ArchiveRow key={c.id} cand={c} />
+                <ArchiveRow key={c.id} cand={c} onRemove={() => setDel(c)} />
               ))}
             </ul>
           )}
@@ -183,10 +185,40 @@ export default function ArchiveModal({ store, onClose }: { store: FrontStore; on
         </div>
       </div>
     </div>
+
+    {/* 删除确认 */}
+    {del && (
+      <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-900/50 p-4" onClick={() => setDel(null)}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-black text-rose-600">删除这条记录？</h3>
+          <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+            {del.number} {del.name} · {DEPT_MAP[del.department].name} · {del.day}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            将把它从名单与导出中永久删除，不可恢复；若它还在当前队列也会一并移除。
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button onClick={() => setDel(null)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+              取消
+            </button>
+            <button
+              onClick={async () => {
+                await store.remove(del.id);
+                setDel(null);
+              }}
+              className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700"
+            >
+              确认删除
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
-function ArchiveRow({ cand }: { cand: Candidate }) {
+function ArchiveRow({ cand, onRemove }: { cand: Candidate; onRemove: () => void }) {
   const [open, setOpen] = useState(false);
   const col = DEPT_COLOR[cand.department];
   const jt = judgmentText(cand.judgment);
@@ -254,6 +286,14 @@ function ArchiveRow({ cand }: { cand: Candidate }) {
           {cand.note && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">报名备注：{cand.note}</p>
           )}
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={onRemove}
+              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+            >
+              删除这条
+            </button>
+          </div>
         </div>
       )}
     </li>

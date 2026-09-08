@@ -244,6 +244,25 @@ export function completeInterview(s: AppState, candidateId: string, now: number 
   return withStats(next);
 }
 
+/** 删除一条候选人记录（当前队列或历史归档均可）：从看板/队列/名单中移除，号码不复用。找不到则原样返回。 */
+export function removeCandidate(s: AppState, candidateId: string): AppState {
+  const next = clone(s);
+  const li = next.candidates.findIndex((c) => c.id === candidateId);
+  if (li >= 0) {
+    const [c] = next.candidates.splice(li, 1);
+    const q = next.queueOrder[c.department] || [];
+    const qi = q.indexOf(candidateId);
+    if (qi >= 0) q.splice(qi, 1);
+    return withStats(next);
+  }
+  const ai = next.archive.findIndex((c) => c.id === candidateId);
+  if (ai >= 0) {
+    next.archive.splice(ai, 1);
+    return next;
+  }
+  return s; // 已被删/不存在：revision 不变
+}
+
 /** 给某位候选人追加一条面试备注：多条共存、追加式，多位面试官同时写互不覆盖 */
 export function addComment(s: AppState, candidateId: string, text: string, now: number = Date.now()): AppState {
   const t = (text || '').trim();

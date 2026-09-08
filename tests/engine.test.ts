@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createEmptyState, registerCandidate, addCandidate, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, advanceSession,
+  createEmptyState, registerCandidate, addCandidate, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, removeCandidate, advanceSession,
   buildAnnouncementText, statsOf, waitingList, listByStatus, findCandidateByMobile,
 } from '@/shared/engine';
 
@@ -237,6 +237,35 @@ describe('addComment / setJudgment 面试备注与临时判断', () => {
     const archivedId = s.archive[0].id;
     expect(() => addComment(s, archivedId, 'x', T0)).toThrow();
     expect(() => setJudgment(s, archivedId, 'pass', T0)).toThrow();
+  });
+});
+
+describe('removeCandidate 删除记录', () => {
+  it('删除当前队列等待者：移出列表并同步清出队列', () => {
+    const base = seed(['A', 'A', 'A']);
+    const a2 = byNum(base, 'A02');
+    const s = removeCandidate(base, a2.id);
+    expect(s.candidates.length).toBe(2);
+    expect(waitingList(s, 'A').map((c) => c.number)).toEqual(['A01', 'A03']);
+  });
+  it('删除面试中者同样移除并重算统计', () => {
+    const base = seed(['A', 'A']);
+    const a1 = byNum(base, 'A01');
+    const s1 = callCandidates(base, 'A', [a1.id], T0);
+    const s2 = removeCandidate(s1, a1.id);
+    expect(s2.candidates.length).toBe(1);
+    expect(s2.stats.interviewing).toBe(0);
+  });
+  it('删除历史归档记录', () => {
+    const s1 = advanceSession(seed(['A']), T0);
+    const id = s1.archive[0].id;
+    const s2 = removeCandidate(s1, id);
+    expect(s2.archive.length).toBe(0);
+    expect(s2.candidates.length).toBe(0);
+  });
+  it('删除不存在的 id → revision 不变', () => {
+    const base = seed(['A']);
+    expect(removeCandidate(base, 'nope').revision).toBe(base.revision);
   });
 });
 

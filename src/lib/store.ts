@@ -1,6 +1,6 @@
 import type { AppState, Candidate, DeptCode } from '@/shared/types';
 import type { Judgment } from '@/shared/types';
-import { registerCandidate, addCandidate, advanceSession, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, createEmptyState, hydrateState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
+import { registerCandidate, addCandidate, advanceSession, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, removeCandidate, createEmptyState, hydrateState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
 
 const LS_KEY = 'interview_queue_state_v1';
 const LS_LOCAL_PW = 'iq_local_pw';
@@ -24,6 +24,7 @@ export interface FrontStore {
   complete(candidateId: string): Promise<void>;
   comment(candidateId: string, text: string): Promise<void>;
   judge(candidateId: string, judgment: Judgment | null): Promise<void>;
+  remove(candidateId: string): Promise<void>;
 }
 
 /** 探测后端可用性 */
@@ -122,6 +123,10 @@ function createServerStore(): FrontStore {
     },
     judge: async (candidateId, judgment) => {
       await call('/api/interviewer/judgment', 'POST', { candidateId, judgment });
+      await refreshNow();
+    },
+    remove: async (candidateId) => {
+      await call('/api/interviewer/remove', 'POST', { candidateId });
       await refreshNow();
     },
   };
@@ -223,6 +228,9 @@ function createLocalStore(): FrontStore {
     },
     judge: async (candidateId, judgment) => {
       bump(setJudgment(holder.state, candidateId, judgment));
+    },
+    remove: async (candidateId) => {
+      bump(removeCandidate(holder.state, candidateId));
     },
   };
 }

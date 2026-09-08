@@ -111,6 +111,20 @@ describe('API', () => {
     const r = await request(app).post('/api/interviewer/comment').send({ candidateId: 'x', text: 'hi' });
     expect(r.status).toBe(401);
   });
+  it('登录后删除记录（当前队列）→ revision 增加', async () => {
+    const login = await request(app).post('/api/interviewer/login').send({ password: '123' });
+    const token = login.body.token;
+    const st = (await request(app).get('/api/state')).body;
+    const id = st.candidates[0].id;
+    const before = st.revision;
+    const r = await request(app).post('/api/interviewer/remove').send({ candidateId: id }).set('Authorization', `Bearer ${token}`);
+    expect(r.status).toBe(200);
+    expect((await request(app).get('/api/state')).body.revision).toBeGreaterThan(before);
+  });
+  it('未登录删除 → 401', async () => {
+    const r = await request(app).post('/api/interviewer/remove').send({ candidateId: 'x' });
+    expect(r.status).toBe(401);
+  });
   it('未登录开启新一天 → 401', async () => {
     const res = await request(app).post('/api/interviewer/new-session').send({});
     expect(res.status).toBe(401);

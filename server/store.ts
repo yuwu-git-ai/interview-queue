@@ -4,7 +4,7 @@ import type { AppState, Candidate, DeptCode, Judgment } from '../shared/types';
 import {
   createEmptyState, registerCandidate, addCandidate as engAddCandidate, callCandidates as engCallCandidates, recall as engRecall,
   reorder as engReorder, completeInterview as engComplete, addComment as engAddComment, setJudgment as engSetJudgment,
-  advanceSession as engAdvanceSession, hydrateState, waitingList, type RegisterInput, type StaffAddInput, type ReorderAction,
+  removeCandidate as engRemove, advanceSession as engAdvanceSession, hydrateState, waitingList, type RegisterInput, type StaffAddInput, type ReorderAction,
 } from '../shared/engine';
 
 export interface RegisterResult { created: boolean; candidate: Candidate; }
@@ -48,6 +48,7 @@ export interface ServerStore {
   complete(candidateId: string): AppState;
   addComment(candidateId: string, text: string): AppState;
   setJudgment(candidateId: string, judgment: Judgment | null): AppState;
+  remove(candidateId: string): AppState;
   lookupByMobile(mobile: string): Candidate[];
   verifyPassword(pw: string): boolean;
 }
@@ -84,6 +85,7 @@ export function createServerStore(file = process.env.STATE_FILE || './data/state
     complete: (candidateId) => { const next = engComplete(state, candidateId); if (next !== state) commit(next); return state; },
     addComment: (candidateId, text) => { const next = engAddComment(state, candidateId, text); commit(next); return state; },
     setJudgment: (candidateId, judgment) => { const next = engSetJudgment(state, candidateId, judgment); commit(next); return state; },
+    remove: (candidateId) => { const next = engRemove(state, candidateId); if (next !== state) commit(next); return state; },
     lookupByMobile: (mobile) => state.candidates.filter((c) => c.mobile === mobile),
     verifyPassword: (pw) => pw === (process.env.INTERVIEWER_PASSWORD || '123'),
   };
