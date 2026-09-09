@@ -1,7 +1,7 @@
 import type { DeptCode, Department } from './types';
 
 export const DEPARTMENTS: Department[] = [
-  { code: 'A', name: '事业部', room: '教210' },
+  { code: 'A', name: '事业部', room: '教214' },
   { code: 'B', name: '综务部', room: '教210' },
   { code: 'C', name: '信技部', room: '教211' },
   { code: 'D', name: '宣传部', room: '教211' },

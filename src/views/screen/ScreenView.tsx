@@ -6,6 +6,13 @@ import DeptColumn from './DeptColumn';
 
 export default function ScreenView({ store }: { store: FrontStore }) {
   const s = store.state;
+  // 按教室分组各部门，顶部位置提示随配置自动更新
+  const rooms = Object.entries(
+    DEPARTMENTS.reduce<Record<string, string[]>>((m, d) => {
+      (m[d.room] ??= []).push(d.name);
+      return m;
+    }, {})
+  );
   return (
     // 桌面(=投影大屏)固定占满高度；窄屏(手机)改为自然流式、页面可上下滚动
     <div className="flex flex-col gap-3 p-3 lg:h-full">
@@ -13,12 +20,11 @@ export default function ScreenView({ store }: { store: FrontStore }) {
       <header className="flex items-center justify-between rounded-2xl bg-white px-4 py-2 shadow">
         <span className="rounded-lg bg-rose-600 px-3 py-1 text-base font-black text-white lg:text-lg">等候室 {WAIT_ROOM}</span>
         <div className="hidden gap-4 text-sm font-bold text-slate-600 lg:flex">
-          <span>
-            📍 事业部 &amp; 综务部 <span className="text-blue-700">➜ 教210</span>
-          </span>
-          <span>
-            📍 信技部 &amp; 宣传部 <span className="text-orange-600">➜ 教211</span>
-          </span>
+          {rooms.map(([room, names]) => (
+            <span key={room}>
+              📍 {names.join(' & ')} <span className="text-blue-700">➜ {room}</span>
+            </span>
+          ))}
         </div>
       </header>
 

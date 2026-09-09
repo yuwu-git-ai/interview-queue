@@ -174,7 +174,7 @@ export function addCandidate(s: AppState, input: StaffAddInput): { state: AppSta
   return { state: r.state, candidate: r.candidate };
 }
 
-/** 组公告文本：A02号 张三、A05号 李四 同学，请前往 事业部（教210） 参加面试 */
+/** 组公告文本：A02号 张三、A05号 李四 同学，请前往 事业部（教214） 参加面试 */
 export function buildGroupText(list: Candidate[]): string {
   const d = DEPT_MAP[list[0].department];
   const who = list.map((c) => `${c.number}号 ${c.name}`).join('、');

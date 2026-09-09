@@ -204,7 +204,7 @@ describe('派生视图', () => {
     expect(findCandidateByMobile(s, '13800000000')?.id).toBe(c.id);
     expect(statsOf(s)).toEqual({ total: 1, interviewing: 0, waiting: 1, completed: 0 });
     expect(buildAnnouncementText(s, c.id)).toContain('A01');
-    expect(buildAnnouncementText(s, c.id)).toContain('教210');
+    expect(buildAnnouncementText(s, c.id)).toContain('教214');
   });
 });
 
