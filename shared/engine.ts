@@ -51,8 +51,11 @@ export function hydrateState(raw: AppState): AppState {
     day: c.day || dayOf(c.registeredAt || Date.now()),
     comments: Array.isArray(c.comments) ? c.comments : [],
   });
+  // 部门(名称/教室)以代码常量 DEPARTMENTS 为准，历史 state 里的旧配置不生效
+  const departments = Object.fromEntries(DEPARTMENTS.map((d) => [d.code, { ...d }])) as Record<DeptCode, Department>;
   return {
     ...raw,
+    departments,
     currentSession: cur,
     candidates: Array.isArray(raw.candidates) ? raw.candidates.map((c) => fill(c, cur)) : [],
     archive: Array.isArray(raw.archive) ? raw.archive.map((c) => fill(c, 1)) : [],
