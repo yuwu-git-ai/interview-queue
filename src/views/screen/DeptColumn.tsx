@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, UserCheck, Users } from 'lucide-react';
 import type { AppState, DeptCode } from '@/shared/types';
-import { DEPT_MAP, DEPT_COLOR, WAIT_ROOM } from '@/shared/constants';
+import { DEPT_MAP, DEPT_COLOR } from '@/shared/constants';
 import { listByStatus } from '@/shared/engine';
 import DeptBadge from '@/src/components/DeptBadge';
 
@@ -24,7 +24,7 @@ function Elapsed({ start }: { start?: number }) {
 }
 
 export default function DeptColumn({ state, code }: { state: AppState; code: DeptCode }) {
-  const d = DEPT_MAP[code];
+  const d = state.departments[code] || DEPT_MAP[code];
   const c = DEPT_COLOR[code];
   const { interviewing, waiting, completed } = listByStatus(state, code);
   const sole = interviewing.length === 1 ? interviewing[0] : undefined;
@@ -39,7 +39,7 @@ export default function DeptColumn({ state, code }: { state: AppState; code: Dep
         <div className="text-sm text-slate-500">
           面试室 {d.room}
           <span className="mx-1 text-slate-300">|</span>
-          等候室 {WAIT_ROOM}
+          等候室 {state.waitRoom}
         </div>
       </header>
 

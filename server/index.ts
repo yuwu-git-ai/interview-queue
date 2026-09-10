@@ -99,6 +99,18 @@ export function buildApp(opts: Options = {}) {
     catch (e: any) { res.status(400).json({ error: e.message }); }
   });
 
+  // 考场设置：等候室 / 各部门面试室 / 今日面试部门开关
+  app.post('/api/interviewer/settings', auth, (req, res) => {
+    try {
+      const { rooms, waitRoom, active } = req.body || {};
+      if (waitRoom != null) store.setWaitRoom(String(waitRoom));
+      if (rooms) for (const [code, room] of Object.entries(rooms)) if (room != null) store.setRoom(code as any, String(room));
+      if (active) for (const [code, v] of Object.entries(active)) store.setDeptActive(code as any, !!v);
+      const s = store.getState();
+      res.json({ ok: true, revision: s.revision, departments: s.departments, waitRoom: s.waitRoom });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
   // 面试官补录（现场没扫码的同学）：仅需 部门+姓名+手机号，微信/班级选填
   app.post('/api/interviewer/register', auth, (req, res) => {
     try {

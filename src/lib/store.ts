@@ -1,6 +1,13 @@
 import type { AppState, Candidate, DeptCode } from '@/shared/types';
 import type { Judgment } from '@/shared/types';
-import { registerCandidate, addCandidate, advanceSession, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, removeCandidate, createEmptyState, hydrateState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
+import { registerCandidate, addCandidate, advanceSession, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, removeCandidate, setRoom, setWaitRoom, setDeptActive, createEmptyState, hydrateState, waitingList, type RegisterInput, type StaffAddInput } from '@/shared/engine';
+
+/** 考场设置补丁：等候室 / 各部门面试室 / 今日面试部门开关 */
+export interface SettingsPatch {
+  waitRoom?: string;
+  rooms?: Partial<Record<DeptCode, string>>;
+  active?: Partial<Record<DeptCode, boolean>>;
+}
 
 const LS_KEY = 'interview_queue_state_v1';
 const LS_LOCAL_PW = 'iq_local_pw';
@@ -25,6 +32,7 @@ export interface FrontStore {
   comment(candidateId: string, text: string): Promise<void>;
   judge(candidateId: string, judgment: Judgment | null): Promise<void>;
   remove(candidateId: string): Promise<void>;
+  saveSettings(patch: SettingsPatch): Promise<void>;
 }
 
 /** 探测后端可用性 */
@@ -129,6 +137,10 @@ function createServerStore(): FrontStore {
       await call('/api/interviewer/remove', 'POST', { candidateId });
       await refreshNow();
     },
+    saveSettings: async (patch) => {
+      await call('/api/interviewer/settings', 'POST', patch);
+      await refreshNow();
+    },
   };
 }
 
@@ -231,6 +243,13 @@ function createLocalStore(): FrontStore {
     },
     remove: async (candidateId) => {
       bump(removeCandidate(holder.state, candidateId));
+    },
+    saveSettings: async (patch) => {
+      let st = holder.state;
+      if (patch.waitRoom != null) st = setWaitRoom(st, patch.waitRoom);
+      if (patch.rooms) for (const [code, room] of Object.entries(patch.rooms)) if (room != null) st = setRoom(st, code as DeptCode, room);
+      if (patch.active) for (const [code, v] of Object.entries(patch.active)) st = setDeptActive(st, code as DeptCode, !!v);
+      bump(st);
     },
   };
 }

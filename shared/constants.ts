@@ -12,6 +12,8 @@ export const DEPT_MAP: Record<DeptCode, Department> = Object.fromEntries(
 ) as Record<DeptCode, Department>;
 
 export const WAIT_ROOM = '教208';
+/** 改动 DEPARTMENTS / WAIT_ROOM 的默认值时 +1：已部署实例下次加载会一次性采用新默认（之后以面试官端修改为准） */
+export const CONFIG_VERSION = 2;
 export const MOBILE_RE = /^1[3-9]\d{9}$/;
 export const NUMBER_PAD = 2;               // A01（从 1 开始，补零到至少 2 位）
 export const MAX_ANNOUNCEMENTS = 30;

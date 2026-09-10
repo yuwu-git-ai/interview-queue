@@ -15,7 +15,8 @@ export interface Comment {
 export interface Department {
   code: DeptCode;
   name: string;   // 事业部/综务部/信技部/宣传部
-  room: string;   // 教210/教211
+  room: string;   // 面试室，可在面试官端修改
+  active?: boolean; // 今天是否面试（false → 扫码登记不出现、大屏不显示）
 }
 
 export interface Candidate {
@@ -52,6 +53,8 @@ export interface Announcement {
 export interface AppState {
   revision: number;
   departments: Record<DeptCode, Department>;
+  waitRoom: string;         // 等候室，可在面试官端修改
+  configVersion: number;    // 配置版本：常量默认值变更时递增，用于一次性覆盖已部署实例的历史配置
   currentSession: number;   // 当前第几场(天)；board/看板/叫号只显示本场
   candidates: Candidate[];  // 本场在册
   archive: Candidate[];     // 历史场次归档（跨天保留，可按场次筛选/导出）

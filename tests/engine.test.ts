@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   createEmptyState, registerCandidate, addCandidate, callCandidates, recall, reorder, completeInterview, addComment, setJudgment, removeCandidate, advanceSession,
+  setRoom, setWaitRoom, setDeptActive, activeDepartments, hydrateState, buildGroupText,
   buildAnnouncementText, statsOf, waitingList, listByStatus, findCandidateByMobile,
 } from '@/shared/engine';
+import { CONFIG_VERSION, DEPARTMENTS } from '@/shared/constants';
 
 const T0 = 1_700_000_000_000;
 
@@ -266,6 +268,41 @@ describe('removeCandidate 删除记录', () => {
   it('删除不存在的 id → revision 不变', () => {
     const base = seed(['A']);
     expect(removeCandidate(base, 'nope').revision).toBe(base.revision);
+  });
+});
+
+describe('考场设置：教室 / 等候室 / 部门开关', () => {
+  it('改教室后组公告文本随之更新', () => {
+    const base = seed(['A']);
+    const s = setRoom(base, 'A', '教299');
+    expect(s.departments.A.room).toBe('教299');
+    expect(buildGroupText(s, s.candidates)).toContain('教299');
+  });
+  it('空教室抛错', () => {
+    expect(() => setRoom(createEmptyState(), 'A', '  ')).toThrow();
+  });
+  it('改等候室', () => {
+    const s = setWaitRoom(createEmptyState(), '教101');
+    expect(s.waitRoom).toBe('教101');
+  });
+  it('关闭部门后 activeDepartments 不含它', () => {
+    const s = setDeptActive(createEmptyState(), 'C', false);
+    const codes = activeDepartments(s).map((d) => d.code);
+    expect(codes).not.toContain('C');
+    expect(codes).toContain('A');
+  });
+  it('hydrate：configVersion 过期时采用常量新默认(教室被覆盖)，之后以 state 为准', () => {
+    const old = { ...createEmptyState(), configVersion: CONFIG_VERSION - 1, waitRoom: '旧等候室' } as any;
+    old.departments.A.room = '旧教210';
+    const h = hydrateState(old);
+    expect(h.configVersion).toBe(CONFIG_VERSION);
+    expect(h.departments.A.room).toBe(DEPARTMENTS.find((d) => d.code === 'A')!.room);
+    expect(h.waitRoom).toBe('教208');
+    // 版本一致时保留 state 里面试官改过的值
+    const edited = setRoom(setWaitRoom(h, '自定等候'), 'A', '自定教室');
+    const h2 = hydrateState(edited);
+    expect(h2.departments.A.room).toBe('自定教室');
+    expect(h2.waitRoom).toBe('自定等候');
   });
 });
 

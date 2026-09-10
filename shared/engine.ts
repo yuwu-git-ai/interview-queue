@@ -1,5 +1,5 @@
 import type { AppState, Announcement, Candidate, Department, DeptCode, Judgment, Status } from './types';
-import { DEPT_MAP, DEPARTMENTS, MOBILE_RE, NUMBER_PAD, MAX_ANNOUNCEMENTS } from './constants';
+import { DEPT_MAP, DEPARTMENTS, MOBILE_RE, NUMBER_PAD, MAX_ANNOUNCEMENTS, WAIT_ROOM, CONFIG_VERSION } from './constants';
 
 /** 浏览器与 Node 双兼容的 uuid（不用 node:crypto，避免打浏览器包报错） */
 function uuid(): string {
@@ -21,10 +21,12 @@ export interface RegisterInput {
 }
 
 export function createEmptyState(): AppState {
-  const departments = Object.fromEntries(DEPARTMENTS.map((d) => [d.code, { ...d }])) as Record<DeptCode, Department>;
+  const departments = Object.fromEntries(DEPARTMENTS.map((d) => [d.code, { ...d, active: true }])) as Record<DeptCode, Department>;
   return {
     revision: 0,
     departments,
+    waitRoom: WAIT_ROOM,
+    configVersion: CONFIG_VERSION,
     currentSession: 1,
     candidates: [],
     archive: [],
@@ -51,11 +53,20 @@ export function hydrateState(raw: AppState): AppState {
     day: c.day || dayOf(c.registeredAt || Date.now()),
     comments: Array.isArray(c.comments) ? c.comments : [],
   });
-  // 部门(名称/教室)以代码常量 DEPARTMENTS 为准，历史 state 里的旧配置不生效
-  const departments = Object.fromEntries(DEPARTMENTS.map((d) => [d.code, { ...d }])) as Record<DeptCode, Department>;
+  // 部门名称以代码常量为准；教室/开关以 state 为准（面试官端可改）。
+  // configVersion 变化 → 一次性采用常量新默认（覆盖历史教室），之后以 state 为准。
+  const force = raw.configVersion !== CONFIG_VERSION;
+  const departments = Object.fromEntries(
+    DEPARTMENTS.map((d) => {
+      const old = raw.departments?.[d.code];
+      return [d.code, { code: d.code, name: d.name, room: force ? d.room : old?.room || d.room, active: force ? true : old?.active ?? true }];
+    })
+  ) as Record<DeptCode, Department>;
   return {
     ...raw,
     departments,
+    waitRoom: force ? WAIT_ROOM : raw.waitRoom || WAIT_ROOM,
+    configVersion: CONFIG_VERSION,
     currentSession: cur,
     candidates: Array.isArray(raw.candidates) ? raw.candidates.map((c) => fill(c, cur)) : [],
     archive: Array.isArray(raw.archive) ? raw.archive.map((c) => fill(c, 1)) : [],
@@ -178,10 +189,50 @@ export function addCandidate(s: AppState, input: StaffAddInput): { state: AppSta
 }
 
 /** 组公告文本：A02号 张三、A05号 李四 同学，请前往 事业部（教214） 参加面试 */
-export function buildGroupText(list: Candidate[]): string {
-  const d = DEPT_MAP[list[0].department];
+export function buildGroupText(s: AppState, list: Candidate[]): string {
+  const d = s.departments[list[0].department] || DEPT_MAP[list[0].department];
   const who = list.map((c) => `${c.number}号 ${c.name}`).join('、');
   return `${who} 同学，请前往 ${d.name}（${d.room}） 参加面试`;
+}
+
+/** 等候室名（state 可为空时回退默认） */
+export function waitRoomOf(s: AppState): string {
+  return s.waitRoom || WAIT_ROOM;
+}
+
+/** 修改某部门面试室 */
+export function setRoom(s: AppState, code: DeptCode, room: string): AppState {
+  const r = (room || '').trim();
+  if (!r) throw new Error('面试室不能为空');
+  if (!s.departments[code]) throw new Error('部门不存在');
+  const next = clone(s);
+  next.departments[code] = { ...next.departments[code], room: r };
+  next.configVersion = CONFIG_VERSION;
+  return next;
+}
+
+/** 修改等候室 */
+export function setWaitRoom(s: AppState, room: string): AppState {
+  const r = (room || '').trim();
+  if (!r) throw new Error('等候室不能为空');
+  const next = clone(s);
+  next.waitRoom = r;
+  next.configVersion = CONFIG_VERSION;
+  return next;
+}
+
+/** 开启/关闭某部门今日面试（关闭后扫码登记不出现、大屏不显示） */
+export function setDeptActive(s: AppState, code: DeptCode, active: boolean): AppState {
+  if (!s.departments[code]) throw new Error('部门不存在');
+  const next = clone(s);
+  next.departments[code] = { ...next.departments[code], active };
+  next.configVersion = CONFIG_VERSION;
+  return next;
+}
+
+/** 今日开放面试的部门 */
+export function activeDepartments(s: AppState): Department[] {
+  return DEPARTMENTS.map((d) => s.departments[d.code] || d).filter((d) => d.active !== false);
 }
 
 /**
@@ -206,7 +257,7 @@ export function callCandidates(s: AppState, department: DeptCode, ids: string[],
     c.callCount += 1;
   }
   const chosen = uniq.map((id) => next.candidates.find((c) => c.id === id)!);
-  pushAnnouncement(next, 'call', department, uniq[0], buildGroupText(chosen), now);
+  pushAnnouncement(next, 'call', department, uniq[0], buildGroupText(next, chosen), now);
   return withStats(next);
 }
 
@@ -215,7 +266,7 @@ export function recall(s: AppState, department: DeptCode, now: number = Date.now
   const group = s.candidates.filter((c) => c.department === department && c.status === 'interviewing');
   if (!group.length) return s;
   const next = clone(s);
-  pushAnnouncement(next, 'recall', department, group[0].id, buildGroupText(group), now);
+  pushAnnouncement(next, 'recall', department, group[0].id, buildGroupText(next, group), now);
   return next;
 }
 
@@ -290,7 +341,7 @@ export function setJudgment(s: AppState, candidateId: string, judgment: Judgment
 
 export function buildAnnouncementText(s: AppState, candidateId: string): string {
   const c = s.candidates.find((x) => x.id === candidateId)!;
-  return buildGroupText([c]);
+  return buildGroupText(s, [c]);
 }
 
 export function waitingList(s: AppState, department: DeptCode): Candidate[] {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, CalendarPlus, ClipboardList, LogOut, PhoneForwarded, Sparkles, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarPlus, ClipboardList, LogOut, PhoneForwarded, Settings, Sparkles, Trash2, UserPlus, X } from 'lucide-react';
 import type { Candidate, DeptCode, Judgment } from '@/shared/types';
 import { DEPARTMENTS, DEPT_COLOR, DEPT_MAP, MOBILE_RE } from '@/shared/constants';
 import { listByStatus } from '@/shared/engine';
@@ -11,6 +11,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
   const [adding, setAdding] = useState<DeptCode | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [showNewDay, setShowNewDay] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [recording, setRecording] = useState<string | null>(null);
 
   if (!authed) return <Login store={store} onOk={() => setAuthed(true)} />;
@@ -43,6 +44,13 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setShowSettings(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            <Settings className="h-4 w-4" />
+            考场设置
+          </button>
+          <button
             onClick={() => setShowArchive(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-slate-900"
           >
@@ -68,6 +76,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
       {adding && <AddCandidateModal store={store} dept={adding} onClose={() => setAdding(null)} />}
       {showArchive && <ArchiveModal store={store} onClose={() => setShowArchive(false)} />}
       {showNewDay && <NewDayModal store={store} onClose={() => setShowNewDay(false)} />}
+      {showSettings && <SettingsModal store={store} onClose={() => setShowSettings(false)} />}
       {recording && <RecordModal store={store} candidateId={recording} onClose={() => setRecording(null)} />}
     </div>
   );
@@ -76,7 +85,7 @@ export default function InterviewerView({ store }: { store: FrontStore }) {
 /* ---------- 单部门卡片：面试中(可一组多人) + 勾选叫号 + 手动排序 ---------- */
 function DeptCard({ store, code, onAdd, onRecord }: { store: FrontStore; code: DeptCode; onAdd: () => void; onRecord: (candidateId: string) => void }) {
   const col = DEPT_COLOR[code];
-  const d = DEPT_MAP[code];
+  const d = store.state.departments[code] || DEPT_MAP[code];
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -696,6 +705,96 @@ function RecordModal({ store, candidateId, onClose }: { store: FrontStore; candi
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 考场设置：等候室 / 各部门面试室 / 今日面试部门开关 ---------- */
+function SettingsModal({ store, onClose }: { store: FrontStore; onClose: () => void }) {
+  const dep = store.state.departments;
+  const [waitRoom, setWaitRoomState] = useState(store.state.waitRoom);
+  const [rooms, setRooms] = useState<Record<string, string>>(() =>
+    Object.fromEntries(DEPARTMENTS.map((d) => [d.code, dep[d.code]?.room || d.room]))
+  );
+  const [active, setActive] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(DEPARTMENTS.map((d) => [d.code, dep[d.code]?.active !== false]))
+  );
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await store.saveSettings({ waitRoom, rooms, active });
+      onClose();
+    } catch (e: any) {
+      setErr(e?.message || '保存失败');
+      setBusy(false);
+    }
+  };
+
+  const inp =
+    'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none';
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-3" onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <h2 className="text-lg font-black text-slate-800">考场设置</h2>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
+            教室 / 等候室随时可改，改完大屏与扫码取号立即同步；<b>关闭的部门今天不面试</b>（扫码取号里不再出现、大屏也不显示）。
+          </p>
+
+          <label className="block">
+            <span className="text-sm font-bold text-slate-700">等候室</span>
+            <input className={`mt-1.5 ${inp}`} value={waitRoom} onChange={(e) => setWaitRoomState(e.target.value)} placeholder="如：教208" />
+          </label>
+
+          <p className="mb-1.5 mt-5 text-sm font-bold text-slate-700">各部门</p>
+          <ul className="space-y-2">
+            {DEPARTMENTS.map((d) => {
+              const col = DEPT_COLOR[d.code];
+              const on = active[d.code];
+              return (
+                <li key={d.code} className={`flex items-center gap-2.5 rounded-xl border p-2.5 ${on ? 'border-slate-200' : 'border-slate-200 bg-slate-50'}`}>
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5" title="今天是否面试">
+                    <input type="checkbox" checked={on} onChange={(e) => setActive((m) => ({ ...m, [d.code]: e.target.checked }))} className="h-4 w-4 accent-blue-600" />
+                    <span className={`grid h-8 w-8 place-items-center rounded-lg text-sm font-black text-white ${on ? col.bg : 'bg-slate-300'}`}>
+                      {d.code}
+                    </span>
+                  </label>
+                  <span className={`w-16 shrink-0 text-sm font-bold ${on ? 'text-slate-700' : 'text-slate-400'}`}>{d.name}</span>
+                  <input
+                    className={`${inp} ${on ? '' : 'opacity-60'}`}
+                    value={rooms[d.code] ?? ''}
+                    onChange={(e) => setRooms((m) => ({ ...m, [d.code]: e.target.value }))}
+                    placeholder="面试室，如 教214"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+
+          {err && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{err}</p>}
+        </div>
+
+        <div className="flex gap-2 border-t border-slate-100 p-4">
+          <button onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+            取消
+          </button>
+          <button onClick={save} disabled={busy} className="flex-1 rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-white hover:bg-slate-900 disabled:opacity-40">
+            {busy ? '保存中…' : '保存设置'}
+          </button>
+        </div>
       </div>
     </div>
   );

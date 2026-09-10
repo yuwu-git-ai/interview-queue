@@ -1,8 +1,8 @@
 import { useState, type ChangeEvent } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, MapPin, Search, Ticket, Users } from 'lucide-react';
 import type { Candidate, DeptCode } from '@/shared/types';
-import { DEPARTMENTS, DEPT_MAP, DEPT_COLOR, WAIT_ROOM } from '@/shared/constants';
-import { waitingList } from '@/shared/engine';
+import { DEPT_MAP, DEPT_COLOR } from '@/shared/constants';
+import { waitRoomOf, activeDepartments, waitingList } from '@/shared/engine';
 import type { FrontStore, LookupCandidate } from '@/src/lib/store';
 
 type Phase = 'dept' | 'form' | 'ticket' | 'query';
@@ -55,7 +55,7 @@ export default function RegisterView({ store }: { store: FrontStore }) {
             </div>
             <div>
               <h1 className="text-xl font-black text-white">面试在线取号</h1>
-              <p className="text-xs text-slate-300">等候室 {WAIT_ROOM} · 扫码报到</p>
+              <p className="text-xs text-slate-300">等候室 {waitRoomOf(store.state)} · 扫码报到</p>
             </div>
           </div>
           {/* 任意阶段都可点入进度查询 */}
@@ -86,6 +86,7 @@ export default function RegisterView({ store }: { store: FrontStore }) {
         {phase === 'form' && dept && (
           <FormStep
             dept={dept}
+            room={(store.state.departments[dept] || DEPT_MAP[dept]).room}
             form={form}
             set={set}
             err={err}
@@ -124,7 +125,7 @@ function DeptStep({
     <div>
       <Card title="选择面试部门" subtitle="请选择您要面试的部门，领取对应序号">
         <ul className="space-y-2.5">
-          {DEPARTMENTS.map((d) => {
+          {activeDepartments(store.state).map((d) => {
             const waiting = store.state.candidates.filter((c) => c.department === d.code && c.status === 'waiting').length;
             const col = DEPT_COLOR[d.code];
             const sel = selected === d.code;
@@ -161,16 +162,17 @@ function DeptStep({
           })}
         </ul>
       </Card>
-      <HintNote />
+      <HintNote waitRoom={waitRoomOf(store.state)} />
     </div>
   );
 }
 
 /* ---------- 步骤二：填表 ---------- */
 function FormStep({
-  dept, form, set, err, onBack, onSubmit,
+  dept, room, form, set, err, onBack, onSubmit,
 }: {
   dept: DeptCode;
+  room: string;
   form: { name: string; mobile: string; wechat: string; gradeClass: string };
   set: (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   err: string;
@@ -183,7 +185,7 @@ function FormStep({
     !!form.name && /^1[3-9]\d{9}$/.test(form.mobile) && !!form.wechat && !!form.gradeClass;
 
   return (
-    <Card title="填写报名信息" subtitle={`已选部门：${d.name} · 面试室 ${d.room}`}>
+    <Card title="填写报名信息" subtitle={`已选部门：${d.name} · 面试室 ${room}`}>
       <button onClick={onBack} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" />
         重新选择部门
@@ -226,7 +228,7 @@ function TicketView({
   onQuery: (mobile: string) => void;
 }) {
   const c = ticket.candidate;
-  const d = DEPT_MAP[c.department];
+  const d = store.state.departments[c.department] || DEPT_MAP[c.department];
   const col = DEPT_COLOR[c.department];
 
   // 实时状态：尽量从当前轮询到的 state 里找这条记录
@@ -302,7 +304,7 @@ function TicketView({
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-blue-50 px-3.5 py-3 text-xs leading-relaxed text-blue-700">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            请在等候室（{WAIT_ROOM}）留意大屏叫号与语音播报。
+            请在等候室（{waitRoomOf(store.state)}）留意大屏叫号与语音播报。
             <br />
             轮到您时，请前往上方对应的面试室参加面试。
           </span>
@@ -437,12 +439,12 @@ function InfoRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-function HintNote() {
+function HintNote({ waitRoom }: { waitRoom: string }) {
   return (
     <p className="mt-4 px-2 text-center text-xs leading-relaxed text-slate-400">
       每人每部门限取一个号。
       <br />
-      取号后请在等候室（{WAIT_ROOM}）留意大屏叫号。
+      取号后请在等候室（{waitRoom}）留意大屏叫号。
     </p>
   );
 }
